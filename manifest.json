@@ -10,6 +10,15 @@
     "repositoryUrl": "https://github.com/pacoonrox/SeerrFin",
     "versions": [
       {
+        "version": "1.8.0.0",
+        "changelog": "add requests hub and servarr calendar",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/pacoonrox/SeerrFin/releases/download/1.8.0.0/Jellyfin.Plugin.SeerrFin_12.0.0.zip",
+        "checksum": "9039E4C3C657357351B88919528D8214",
+        "timestamp": "2026-09-12T06:49:54.0000000Z",
+        "dependencies": []
+      },
+      {
         "version": "1.7.1.1",
         "changelog": "Stop repeated Seerr searches after empty or failed results",
         "targetAbi": "12.0.0.0",
