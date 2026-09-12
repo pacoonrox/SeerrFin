@@ -94,6 +94,9 @@ window.seerrFinLog = window.seerrFinLog || {
                             </button>
                         </div>
                     </div>` : '';
+                const actionButtonsHtml = interactive && typeof plugin.buildDiscoverActionButtons === 'function'
+                    ? plugin.buildDiscoverActionButtons(mediaId, mediaType, safeName)
+                    : '';
 
                 return `
                     <div class="card ${cardType} card-hoverable card-withuserdata" data-seerrfin-native-card="true" data-tmdb-id="${mediaId}" data-media-type="${mediaType}" data-name="${safeName}" data-year="${yearValue}" data-rating="${ratingValue}" data-use-poster="${usePoster ? 'true' : 'false'}"${fallbackAttr}${backdropPathAttr}${posterAttr}>
@@ -103,6 +106,7 @@ window.seerrFinLog = window.seerrFinLog || {
                                 <canvas aria-hidden="true" width="20" height="20" class="blurhash-canvas lazy-hidden"></canvas>
                                 <div class="${imageClass}"${imageAttrs} aria-label="${safeName}" role="img"></div>
                                 ${overlayHtml}
+                                ${actionButtonsHtml}
                             </div>
                             ${metaHtml}
                         </div>

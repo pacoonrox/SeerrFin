@@ -22,7 +22,7 @@ For features: describe the feature you are requesting in detail, what problem it
 **Need:** [.NET 10 SDK](https://dotnet.microsoft.com/download), Jellyfin 12.0, Seerr, File Transformation.
 
 ```bash
-git clone https://github.com/varunaditya-plus/SeerrFin.git
+git clone https://github.com/pacoonrox/SeerrFin.git
 cd SeerrFin
 dotnet build SeerrFin.sln -c Release
 ```

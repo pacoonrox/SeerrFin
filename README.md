@@ -2,15 +2,15 @@
 
 <div alt style="text-align: center; transform: scale(.25);">
 	<picture>
-		<source media="(prefers-color-scheme: dark)" srcset="https://github.com/varunaditya-plus/SeerrFin/raw/main/assets/logo_dark.png" />
-		<img alt="SeerrFin Logo" src="https://github.com/varunaditya-plus/SeerrFin/raw/main/assets/logo_light.png" style="width: 170px;" />
+		<source media="(prefers-color-scheme: dark)" srcset="https://github.com/pacoonrox/SeerrFin/raw/main/assets/logo_dark.png" />
+		<img alt="SeerrFin Logo" src="https://github.com/pacoonrox/SeerrFin/raw/main/assets/logo_light.png" style="width: 170px;" />
 	</picture>
 </div>
 
 # SeerrFin
-![GitHub License](https://www.shieldcn.dev/github/license/varunaditya-plus/SeerrFin.svg?variant=outline&size=sm)
-[![GitHub Downloads (all assets, all releases)](https://shieldcn.dev/github/downloads/varunaditya-plus/SeerrFin.svg?variant=outline&size=sm)](https://github.com/varunaditya-plus/SeerrFin/releases/latest)
-[![GitHub Release](https://shieldcn.dev/github/release/varunaditya-plus/SeerrFin.svg?size=sm)](https://github.com/varunaditya-plus/SeerrFin/releases/latest)
+![GitHub License](https://www.shieldcn.dev/github/license/pacoonrox/SeerrFin.svg?variant=outline&size=sm)
+[![GitHub Downloads (all assets, all releases)](https://shieldcn.dev/github/downloads/pacoonrox/SeerrFin.svg?variant=outline&size=sm)](https://github.com/pacoonrox/SeerrFin/releases/latest)
+[![GitHub Release](https://shieldcn.dev/github/release/pacoonrox/SeerrFin.svg?size=sm)](https://github.com/pacoonrox/SeerrFin/releases/latest)
 ![Please star this repo](https://shieldcn.dev/badge/★%20please%20star-22c55e.svg?theme=amber&color=eab308&size=sm&variant=outline)
 
 The best way to discover and request Movies and TV Shows by using Seerr directly in Jellyfin. This plugin adds tabs for discovery, requests, and Letterboxd watchlist syncing, with request modals powered by your Seerr instance. The categories are gotten using TMDB.
@@ -47,7 +47,7 @@ The best way to discover and request Movies and TV Shows by using Seerr directly
 1. Open **Dashboard → Plugins → Manage Repositories**.
 2. Click **New Repository** and paste this repository URL:
 ```
-https://raw.githubusercontent.com/varunaditya-plus/SeerrFin/main/manifest.json
+https://raw.githubusercontent.com/pacoonrox/SeerrFin/main/manifest.json
 ```
 3. Now go back to **Plugins** in the sidebar, select **All** in the filters above the plugins, and click SeerrFin. Then click **Install**.
 4. Now you have to restart your Jellyfin instance. Go to **Dashboard** and click the **Restart** button. You're done!
@@ -70,11 +70,11 @@ After installation, now configure the extension so it will work with your Seerr 
 ## Downloads
 
 <p align="center">
-  <a href="https://downloadhistory.varunaditya.xyz/#varunaditya-plus/SeerrFin&Date">
+  <a href="https://downloadhistory.varunaditya.xyz/#pacoonrox/SeerrFin&Date">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://downloadhistory.varunaditya.xyz/svg?repos=varunaditya-plus/SeerrFin&type=Date&title=&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://downloadhistory.varunaditya.xyz/svg?repos=varunaditya-plus/SeerrFin&type=Date&title=" />
-      <img alt="Download History Chart" src="https://downloadhistory.varunaditya.xyz/svg?repos=varunaditya-plus/SeerrFin&type=Date&title=" width=600 />
+      <source media="(prefers-color-scheme: dark)" srcset="https://downloadhistory.varunaditya.xyz/svg?repos=pacoonrox/SeerrFin&type=Date&title=&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://downloadhistory.varunaditya.xyz/svg?repos=pacoonrox/SeerrFin&type=Date&title=" />
+      <img alt="Download History Chart" src="https://downloadhistory.varunaditya.xyz/svg?repos=pacoonrox/SeerrFin&type=Date&title=" width=600 />
     </picture>
   </a>
 </p>

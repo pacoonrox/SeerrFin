@@ -11,9 +11,221 @@ a[data-seerrfin-menu-nav]:focus-visible {
 .seerrfin-movies-sections,
 .seerrfin-tv-sections,
 .seerrfin-requests-sections,
+.seerrfin-requests-hub-sections,
 .seerrfin-search-section {
     --seerrfin-discover-backdrop-width: 20em;
     --seerrfin-discover-portrait-width: 13.333em;
+}
+
+.seerrfin-requests-hub-nav {
+    display: flex;
+    gap: 0.5em;
+    flex-wrap: wrap;
+    padding-top: 1em;
+    padding-bottom: 0.75em;
+}
+
+.seerrfin-requests-hub-tab {
+    border: 0;
+    border-radius: 0.35em;
+    background: var(--jf-palette-background-paper, rgba(255, 255, 255, 0.08));
+    color: var(--jf-palette-text-primary, inherit);
+    cursor: pointer;
+    font: inherit;
+    font-weight: 600;
+    min-height: 2.6em;
+    padding: 0 1em;
+}
+
+.seerrfin-requests-hub-tab.is-active {
+    background: var(--jf-palette-primary-main, #00a4dc);
+    color: var(--jf-palette-primary-contrastText, #fff);
+}
+
+.seerrfin-requests-hub-pane {
+    display: none;
+}
+
+.seerrfin-requests-hub-pane.is-active {
+    display: block;
+}
+
+.seerrfin-discover-actions {
+    position: absolute;
+    left: 0.45em;
+    right: 0.45em;
+    bottom: 0.45em;
+    z-index: 4;
+    display: flex;
+    gap: 0.35em;
+    justify-content: center;
+    opacity: 0;
+    transform: translateY(0.25em);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    pointer-events: none;
+}
+
+.seerrfin-discover-card:hover .seerrfin-discover-actions,
+[data-seerrfin-native-card="true"]:hover .seerrfin-discover-actions,
+.seerrfin-discover-card:focus-within .seerrfin-discover-actions,
+[data-seerrfin-native-card="true"]:focus-within .seerrfin-discover-actions {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.seerrfin-discover-action {
+    border: 0;
+    border-radius: 0.3em;
+    background: rgba(20, 20, 20, 0.82);
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.78em;
+    font-weight: 700;
+    line-height: 1;
+    min-height: 2.15em;
+    padding: 0 0.65em;
+}
+
+.seerrfin-discover-action--seerr {
+    background: #5e67f2;
+}
+
+.seerrfin-discover-action--radarr {
+    background: #f5b51b;
+    color: #151515;
+}
+
+.seerrfin-discover-action--sonarr {
+    background: #00b7e8;
+    color: #111;
+}
+
+.seerrfin-calendar-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
+}
+
+.seerrfin-calendar-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+}
+
+.seerrfin-calendar-month {
+    min-width: 10em;
+    text-align: center;
+    font-weight: 700;
+}
+
+.seerrfin-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.35em;
+    padding-bottom: 2em;
+}
+
+.seerrfin-calendar-weekday {
+    color: var(--jf-palette-text-secondary, #aaa);
+    font-size: 0.78em;
+    font-weight: 700;
+    padding: 0.25em 0.35em;
+    text-transform: uppercase;
+}
+
+.seerrfin-calendar-day {
+    min-height: 8.5em;
+    border-radius: 0.35em;
+    background: var(--jf-palette-background-paper, rgba(255, 255, 255, 0.05));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0.35em;
+    overflow: hidden;
+}
+
+.seerrfin-calendar-day.is-outside {
+    opacity: 0.42;
+}
+
+.seerrfin-calendar-day.is-today {
+    border-color: var(--jf-palette-primary-main, #00a4dc);
+}
+
+.seerrfin-calendar-day-number {
+    font-size: 0.82em;
+    font-weight: 700;
+    margin-bottom: 0.35em;
+}
+
+.seerrfin-calendar-day-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25em;
+}
+
+.seerrfin-calendar-item {
+    border: 0;
+    border-left: 0.25em solid var(--jf-palette-primary-main, #00a4dc);
+    border-radius: 0.25em;
+    background: rgba(0, 0, 0, 0.28);
+    color: inherit;
+    cursor: pointer;
+    display: block;
+    font: inherit;
+    min-width: 0;
+    padding: 0.35em 0.45em;
+    text-align: left;
+}
+
+.seerrfin-calendar-item--radarr {
+    border-left-color: #f5b51b;
+}
+
+.seerrfin-calendar-item--sonarr {
+    border-left-color: #00b7e8;
+}
+
+.seerrfin-calendar-item-source,
+.seerrfin-calendar-item-subtitle {
+    display: block;
+    color: var(--jf-palette-text-secondary, #aaa);
+    font-size: 0.72em;
+    line-height: 1.2;
+}
+
+.seerrfin-calendar-item-title {
+    display: block;
+    font-size: 0.82em;
+    font-weight: 700;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (max-width: 52em) {
+    .seerrfin-calendar-titlebar {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .seerrfin-calendar-grid {
+        display: block;
+    }
+
+    .seerrfin-calendar-weekday {
+        display: none;
+    }
+
+    .seerrfin-calendar-day {
+        min-height: 0;
+        margin-bottom: 0.45em;
+    }
+
+    .seerrfin-calendar-day.is-outside {
+        display: none;
+    }
 }
 
 .seerrfin-box-card {

@@ -21,6 +21,7 @@ public class SeerrFinController : ControllerBase
     private readonly JellyseerrRequestService _requestService;
     private readonly JellyseerrRequestsService _requestsService;
     private readonly JellyseerrProxyService _proxyService;
+    private readonly ServarrProgressService _servarrProgressService;
     private readonly ImageCacheService _imageCacheService;
     private readonly TmdbBackdropService _tmdbBackdropService;
     private readonly JustWatchQualitiesService _justWatchQualitiesService;
@@ -32,6 +33,7 @@ public class SeerrFinController : ControllerBase
         JellyseerrRequestService requestService,
         JellyseerrRequestsService requestsService,
         JellyseerrProxyService proxyService,
+        ServarrProgressService servarrProgressService,
         ImageCacheService imageCacheService,
         TmdbBackdropService tmdbBackdropService,
         JustWatchQualitiesService justWatchQualitiesService,
@@ -42,6 +44,7 @@ public class SeerrFinController : ControllerBase
         _requestService = requestService;
         _requestsService = requestsService;
         _proxyService = proxyService;
+        _servarrProgressService = servarrProgressService;
         _imageCacheService = imageCacheService;
         _tmdbBackdropService = tmdbBackdropService;
         _justWatchQualitiesService = justWatchQualitiesService;
@@ -176,9 +179,15 @@ public class SeerrFinController : ControllerBase
     {
         PluginConfiguration config = SeerrFinPlugin.Instance.Configuration;
         List<SeerrFinTabConfig> tabs = SeerrFinTabConfigHelper.Normalize(config.Tabs);
+        string? browseUrl = config.ExternalJellyseerrUrl?.Trim();
+        if (string.IsNullOrEmpty(browseUrl))
+        {
+            browseUrl = config.JellyseerrUrl?.Trim();
+        }
         Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
         return Ok(new
         {
+            jellyseerrBrowseUrl = browseUrl ?? string.Empty,
             config.StreamingServiceUseImages,
             config.StudioNetworkUseImages,
             config.GenreUseBackdrops,
@@ -619,6 +628,34 @@ public class SeerrFinController : ControllerBase
             Content = body,
             ContentType = "application/json"
         };
+    }
+
+    [HttpGet("calendar")]
+    [Authorize]
+    public async Task<ActionResult> GetCalendar(
+        [FromQuery] DateTime? start = null,
+        [FromQuery] DateTime? end = null,
+        CancellationToken cancellationToken = default)
+    {
+        DateTime today = DateTime.UtcNow.Date;
+        DateTime rangeStart = (start ?? new DateTime(today.Year, today.Month, 1)).Date;
+        DateTime rangeEnd = (end ?? rangeStart.AddMonths(1).AddDays(-1)).Date;
+
+        if (rangeEnd < rangeStart)
+        {
+            return BadRequest();
+        }
+
+        if ((rangeEnd - rangeStart).TotalDays > 93)
+        {
+            rangeEnd = rangeStart.AddDays(93);
+        }
+
+        JObject payload = await _servarrProgressService
+            .GetCalendarAsync(rangeStart, rangeEnd, cancellationToken)
+            .ConfigureAwait(false);
+
+        return Content(payload.ToString(Newtonsoft.Json.Formatting.None), "application/json");
     }
 
     [HttpGet("proxy/avatar")]

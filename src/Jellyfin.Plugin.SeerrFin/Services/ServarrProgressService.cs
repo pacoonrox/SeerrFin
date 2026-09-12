@@ -65,6 +65,124 @@ public sealed class ServarrProgressService
         }
     }
 
+    public async Task<JObject> GetCalendarAsync(DateTime start, DateTime end, CancellationToken cancellationToken)
+    {
+        PluginConfiguration config = SeerrFinPlugin.Instance.Configuration;
+        JArray items = new();
+
+        if (IsRadarrConfigured(config))
+        {
+            await AddRadarrCalendarItemsAsync(config, start, end, items, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (IsSonarrConfigured(config))
+        {
+            await AddSonarrCalendarItemsAsync(config, start, end, items, cancellationToken).ConfigureAwait(false);
+        }
+
+        return new JObject
+        {
+            ["items"] = new JArray(items.OfType<JObject>().OrderBy(item => item.Value<string>("date") ?? string.Empty))
+        };
+    }
+
+    private async Task AddRadarrCalendarItemsAsync(PluginConfiguration config, DateTime start, DateTime end, JArray items, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using HttpClient client = CreateClient(config.RadarrUrl!, config.RadarrApiKey!);
+            string query = $"calendar?start={Uri.EscapeDataString(start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))}&end={Uri.EscapeDataString(end.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))}&unmonitored=false";
+            JArray? movies = await GetJsonArrayAsync(client, query, cancellationToken).ConfigureAwait(false);
+            string baseUrl = NormalizeServarrBaseUrl(config.RadarrUrl!);
+
+            foreach (JObject movie in movies?.OfType<JObject>() ?? Enumerable.Empty<JObject>())
+            {
+                if (movie.Value<bool?>("monitored") == false)
+                {
+                    continue;
+                }
+
+                string? date = movie.Value<string>("inCinemas")
+                    ?? movie.Value<string>("physicalRelease")
+                    ?? movie.Value<string>("digitalRelease")
+                    ?? movie.Value<string>("releaseDate");
+                if (string.IsNullOrWhiteSpace(date))
+                {
+                    continue;
+                }
+
+                items.Add(new JObject
+                {
+                    ["source"] = "radarr",
+                    ["type"] = "movie",
+                    ["title"] = movie.Value<string>("title") ?? "Unknown movie",
+                    ["date"] = date,
+                    ["status"] = movie.Value<string>("status") ?? string.Empty,
+                    ["overview"] = movie.Value<string>("overview") ?? string.Empty,
+                    ["hasFile"] = movie.Value<bool?>("hasFile") ?? false,
+                    ["monitored"] = movie.Value<bool?>("monitored") ?? true,
+                    ["openUrl"] = BuildServarrOpenUrl(baseUrl, GetTitleSlug(movie), isMovie: true) ?? baseUrl,
+                    ["posterUrl"] = GetServarrPosterUrl(baseUrl, movie)
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SF • failed to load Radarr calendar from {RadarrUrl}", config.RadarrUrl);
+        }
+    }
+
+    private async Task AddSonarrCalendarItemsAsync(PluginConfiguration config, DateTime start, DateTime end, JArray items, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using HttpClient client = CreateClient(config.SonarrUrl!, config.SonarrApiKey!);
+            string query = $"calendar?start={Uri.EscapeDataString(start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))}&end={Uri.EscapeDataString(end.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))}&unmonitored=false&includeSeries=true";
+            JArray? episodes = await GetJsonArrayAsync(client, query, cancellationToken).ConfigureAwait(false);
+            string baseUrl = NormalizeServarrBaseUrl(config.SonarrUrl!);
+
+            foreach (JObject episode in episodes?.OfType<JObject>() ?? Enumerable.Empty<JObject>())
+            {
+                JObject? series = episode.Value<JObject>("series");
+                if (episode.Value<bool?>("monitored") == false || series?.Value<bool?>("monitored") == false)
+                {
+                    continue;
+                }
+
+                string? date = episode.Value<string>("airDateUtc") ?? episode.Value<string>("airDate");
+                if (string.IsNullOrWhiteSpace(date))
+                {
+                    continue;
+                }
+
+                int? season = episode.Value<int?>("seasonNumber");
+                int? episodeNumber = episode.Value<int?>("episodeNumber");
+                string episodeCode = season.HasValue && episodeNumber.HasValue
+                    ? $"S{season.Value:00}E{episodeNumber.Value:00}"
+                    : string.Empty;
+
+                items.Add(new JObject
+                {
+                    ["source"] = "sonarr",
+                    ["type"] = "episode",
+                    ["title"] = series?.Value<string>("title") ?? "Unknown series",
+                    ["episodeTitle"] = episode.Value<string>("title") ?? string.Empty,
+                    ["episodeCode"] = episodeCode,
+                    ["date"] = date,
+                    ["overview"] = episode.Value<string>("overview") ?? string.Empty,
+                    ["hasFile"] = episode.Value<bool?>("hasFile") ?? false,
+                    ["monitored"] = true,
+                    ["openUrl"] = BuildServarrOpenUrl(baseUrl, GetTitleSlug(series), isMovie: false) ?? baseUrl,
+                    ["posterUrl"] = GetServarrPosterUrl(baseUrl, series)
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SF • failed to load Sonarr calendar from {SonarrUrl}", config.SonarrUrl);
+        }
+    }
+
     private static bool IsRadarrConfigured(PluginConfiguration config) => !string.IsNullOrWhiteSpace(config.RadarrUrl) && !string.IsNullOrWhiteSpace(config.RadarrApiKey);
 
     private static bool IsSonarrConfigured(PluginConfiguration config) => !string.IsNullOrWhiteSpace(config.SonarrUrl) && !string.IsNullOrWhiteSpace(config.SonarrApiKey);
@@ -451,6 +569,21 @@ public sealed class ServarrProgressService
         !string.IsNullOrWhiteSpace(titleSlug)
             ? $"{baseUrl}/{(isMovie ? "movie" : "series")}/{titleSlug.Trim()}"
             : null;
+
+    private static string? GetServarrPosterUrl(string baseUrl, JObject? media)
+    {
+        JArray? images = media?.Value<JArray>("images");
+        string? url = images?.OfType<JObject>().FirstOrDefault(image => string.Equals(image.Value<string>("coverType"), "poster", StringComparison.OrdinalIgnoreCase))?.Value<string>("remoteUrl")
+            ?? images?.OfType<JObject>().FirstOrDefault(image => string.Equals(image.Value<string>("coverType"), "poster", StringComparison.OrdinalIgnoreCase))?.Value<string>("url");
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return null;
+        }
+
+        return url.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+            ? url
+            : $"{baseUrl}/{url.TrimStart('/')}";
+    }
 
     private static bool IsUnreleasedMedia(string? value)
     {

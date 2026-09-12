@@ -52,15 +52,17 @@ if (typeof window.seerrFinPlugin === 'undefined') {
         _lastSearchQuery: null,
         _lastSearchItems: null,
         _activeSearchToken: null,
+        _calendarMonth: null,
+        _calendarLoadId: 0,
 
         TAB_DEFS: {
-            movies: { sectionClass: 'seerrfin-movies-sections', defaultTitle: 'Movies' },
-            tv: { sectionClass: 'seerrfin-tv-sections', defaultTitle: 'TV Shows' },
-            requests: { sectionClass: 'seerrfin-requests-sections', defaultTitle: 'Requests' },
-            letterboxd: { sectionClass: 'seerrfin-letterboxd-sections', defaultTitle: 'Letterboxd' }
+            requests: { sectionClass: 'seerrfin-requests-hub-sections', defaultTitle: 'Requests' }
         },
 
         CUSTOM_TABS_PLUGIN_ID: 'fbacd0b6-fd46-4a05-b0a4-2045d6a135b0',
+        SEERR_BASE_URL: '',
+        RADARR_BASE_URL: 'http://192.168.1.237:7878',
+        SONARR_BASE_URL: 'http://192.168.1.237:8989',
 
         init: function () {
             if (typeof ApiClient === 'undefined') {
@@ -75,6 +77,7 @@ if (typeof window.seerrFinPlugin === 'undefined') {
                 this.bindRequestHandler();
                 this.bindCardClickHandler();
                 this.bindViewMoreHandler();
+                this.bindRequestsHubNavigation();
                 this.bindModernNavigation();
                 this.loadDisplaySettings();
                 this.setupSearchIntegration();
@@ -148,6 +151,13 @@ if (typeof window.seerrFinPlugin === 'undefined') {
                 self._renderPending = false;
                 self.renderIfContainerVisible('movies');
                 self.renderIfContainerVisible('tv');
+                self.renderCalendarIfVisible();
+                if (typeof window.__seerrFinRequestsEnsureMounted === 'function') {
+                    window.__seerrFinRequestsEnsureMounted();
+                }
+                if (typeof window.__seerrFinLetterboxdEnsureMounted === 'function') {
+                    window.__seerrFinLetterboxdEnsureMounted();
+                }
             });
         },
 
@@ -547,10 +557,95 @@ if (typeof window.seerrFinPlugin === 'undefined') {
             panel.className = 'tabContent pageTabContent';
             panel.setAttribute('data-seerrfin-tab', id);
 
+            if (id === 'requests') {
+                panel.appendChild(this.createRequestsHub());
+                return panel;
+            }
+
             const sections = document.createElement('div');
             sections.className = 'sections ' + this.TAB_DEFS[id].sectionClass;
             panel.appendChild(sections);
             return panel;
+        },
+
+        createRequestsHub: function () {
+            const hub = document.createElement('div');
+            hub.className = 'sections seerrfin-requests-hub-sections';
+            hub.innerHTML = `
+                <div class="seerrfin-requests-hub-nav padded-left padded-right" role="tablist" aria-label="Requests sections">
+                    <button type="button" class="seerrfin-requests-hub-tab is-active" data-seerrfin-hub-tab="tv" role="tab" aria-selected="true">Shows</button>
+                    <button type="button" class="seerrfin-requests-hub-tab" data-seerrfin-hub-tab="movies" role="tab" aria-selected="false">Movies</button>
+                    <button type="button" class="seerrfin-requests-hub-tab" data-seerrfin-hub-tab="downloads" role="tab" aria-selected="false">Downloads</button>
+                    <button type="button" class="seerrfin-requests-hub-tab" data-seerrfin-hub-tab="calendar" role="tab" aria-selected="false">Calendar</button>
+                </div>
+                <div class="seerrfin-requests-hub-pane is-active" data-seerrfin-hub-pane="tv">
+                    <div class="sections seerrfin-tv-sections"></div>
+                </div>
+                <div class="seerrfin-requests-hub-pane" data-seerrfin-hub-pane="movies">
+                    <div class="sections seerrfin-movies-sections"></div>
+                </div>
+                <div class="seerrfin-requests-hub-pane" data-seerrfin-hub-pane="downloads">
+                    <div class="sections seerrfin-requests-sections"></div>
+                </div>
+                <div class="seerrfin-requests-hub-pane" data-seerrfin-hub-pane="calendar">
+                    <div class="sections seerrfin-calendar-sections"></div>
+                </div>`;
+            return hub;
+        },
+
+        setRequestsHubTab: function (hub, tabId) {
+            if (!hub || !tabId) {
+                return;
+            }
+
+            hub.querySelectorAll('.seerrfin-requests-hub-tab').forEach(function (button) {
+                const active = button.getAttribute('data-seerrfin-hub-tab') === tabId;
+                button.classList.toggle('is-active', active);
+                button.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+
+            hub.querySelectorAll('.seerrfin-requests-hub-pane').forEach(function (pane) {
+                pane.classList.toggle('is-active', pane.getAttribute('data-seerrfin-hub-pane') === tabId);
+            });
+
+            this.scheduleRender();
+        },
+
+        bindRequestsHubNavigation: function () {
+            const self = this;
+            document.addEventListener('click', function (event) {
+                const calendarOpen = event.target.closest && event.target.closest('.seerrfin-calendar-item[data-open-url]');
+                if (calendarOpen) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    window.open(calendarOpen.getAttribute('data-open-url'), '_blank', 'noopener,noreferrer');
+                    return;
+                }
+
+                const prev = event.target.closest && event.target.closest('.seerrfin-calendar-prev');
+                const next = event.target.closest && event.target.closest('.seerrfin-calendar-next');
+                if (prev || next) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    self.shiftCalendarMonth(prev ? -1 : 1);
+                    return;
+                }
+
+                const button = event.target.closest && event.target.closest('.seerrfin-requests-hub-tab');
+                if (!button) {
+                    return;
+                }
+
+                const hub = button.closest('.seerrfin-requests-hub-sections');
+                const tabId = button.getAttribute('data-seerrfin-hub-tab');
+                if (!hub || !tabId) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+                self.setRequestsHubTab(hub, tabId);
+            }, true);
         },
 
         findJellyfinTabButton: function (tabsSlider, kind) {
@@ -833,7 +928,7 @@ if (typeof window.seerrFinPlugin === 'undefined') {
 
         getModernNavId: function (link) {
             if (!link || !link.closest('header.MuiAppBar-root, .MuiDrawer-paper, #user-view-overflow-menu, .customMenuOptions')) return null;
-            const match = /^#\/home\?seerrfinTab=(movies|tv|requests|letterboxd)$/.exec(link.getAttribute('href') || '');
+            const match = /^#\/home\?seerrfinTab=(requests)$/.exec(link.getAttribute('href') || '');
             return match ? match[1] : null;
         },
 
@@ -861,7 +956,7 @@ if (typeof window.seerrFinPlugin === 'undefined') {
                 const tab = tabsById[id];
                 return tab && tab.enabled !== false ? tab : null;
             }).filter(Boolean);
-            const icons = { movies: 'movie', tv: 'tv', requests: 'download', letterboxd: 'bookmark' };
+            const icons = { requests: 'download' };
 
             document.querySelectorAll('header.MuiAppBar-root .MuiToolbar-root > .MuiStack-root').forEach(function (nav) {
                 const runtimeLinks = Array.from(nav.querySelectorAll('[data-seerrfin-runtime-nav]'));
@@ -1331,6 +1426,176 @@ if (typeof window.seerrFinPlugin === 'undefined') {
             });
         },
 
+        renderCalendarIfVisible: function () {
+            const container = this.findActiveContainer('.seerrfin-calendar-sections');
+            if (!container) {
+                return;
+            }
+
+            if (!this._calendarMonth) {
+                const now = new Date();
+                this._calendarMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            }
+
+            const key = this.formatCalendarDate(this._calendarMonth);
+            if (container.dataset.seerrfinCalendarMonth === key && container.dataset.seerrfinLoaded === 'true') {
+                return;
+            }
+
+            container.dataset.seerrfinCalendarMonth = key;
+            this.loadCalendarMonth(container, this._calendarMonth);
+        },
+
+        formatCalendarDate: function (date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return year + '-' + month + '-' + day;
+        },
+
+        parseCalendarDate: function (value) {
+            if (!value) {
+                return null;
+            }
+
+            const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value));
+            if (match) {
+                return new Date(parseInt(match[1], 10), parseInt(match[2], 10) - 1, parseInt(match[3], 10));
+            }
+
+            const date = new Date(value);
+            return isNaN(date.getTime()) ? null : date;
+        },
+
+        shiftCalendarMonth: function (delta) {
+            const current = this._calendarMonth || new Date();
+            this._calendarMonth = new Date(current.getFullYear(), current.getMonth() + delta, 1);
+            document.querySelectorAll('.seerrfin-calendar-sections').forEach(function (container) {
+                delete container.dataset.seerrfinLoaded;
+            });
+            this.scheduleRender();
+        },
+
+        loadCalendarMonth: function (container, monthDate) {
+            const self = this;
+            const loadId = ++self._calendarLoadId;
+            const start = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+            const end = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+            container.dataset.seerrfinLoading = 'true';
+            container.dataset.seerrfinLoaded = 'false';
+            container.innerHTML = self.renderCalendarShell(monthDate, [], true);
+
+            ApiClient.ajax({
+                url: ApiClient.getUrl('SeerrFin/calendar', {
+                    start: self.formatCalendarDate(start),
+                    end: self.formatCalendarDate(end)
+                }),
+                type: 'GET',
+                dataType: 'json'
+            }).then(function (data) {
+                if (loadId !== self._calendarLoadId || !self.isContainerVisible(container)) {
+                    return;
+                }
+
+                container.dataset.seerrfinLoading = 'false';
+                container.dataset.seerrfinLoaded = 'true';
+                container.innerHTML = self.renderCalendarShell(monthDate, self.asArray((data && (data.items || data.Items)) || []), false);
+            }).catch(function (err) {
+                if (loadId !== self._calendarLoadId) {
+                    return;
+                }
+
+                log.warn('calendar load failed', err);
+                container.dataset.seerrfinLoading = 'false';
+                container.dataset.seerrfinLoaded = 'true';
+                container.innerHTML = self.renderCalendarShell(monthDate, [], false, 'Unable to load Radarr/Sonarr calendar.');
+            });
+        },
+
+        renderCalendarShell: function (monthDate, items, loading, error) {
+            const monthLabel = monthDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+            return `
+                <div class="verticalSection seerrfin-calendar-panel">
+                    <div class="sectionTitleContainer sectionTitleContainer-cards padded-left padded-right seerrfin-calendar-titlebar">
+                        <h2 class="sectionTitle sectionTitle-cards">Calendar</h2>
+                        <div class="seerrfin-calendar-controls">
+                            <button type="button" class="paper-icon-button-light seerrfin-calendar-prev" title="Previous month" aria-label="Previous month"><span class="material-icons" aria-hidden="true">chevron_left</span></button>
+                            <span class="seerrfin-calendar-month">${this.escapeHtml(monthLabel)}</span>
+                            <button type="button" class="paper-icon-button-light seerrfin-calendar-next" title="Next month" aria-label="Next month"><span class="material-icons" aria-hidden="true">chevron_right</span></button>
+                        </div>
+                    </div>
+                    ${error ? `<div class="seerrfin-empty-row padded-left padded-right">${this.escapeHtml(error)}</div>` : this.renderCalendarGrid(monthDate, items, loading)}
+                </div>`;
+        },
+
+        renderCalendarGrid: function (monthDate, items, loading) {
+            if (loading) {
+                return '<div class="seerrfin-loading-row padded-left">Loading calendar...</div>';
+            }
+
+            const byDay = {};
+            const self = this;
+            (items || []).forEach(function (item) {
+                const date = self.parseCalendarDate(item.date || item.Date || '');
+                if (!date) {
+                    return;
+                }
+                const key = self.formatCalendarDate(date);
+                (byDay[key] = byDay[key] || []).push(item);
+            });
+
+            const start = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+            const gridStart = new Date(start);
+            gridStart.setDate(gridStart.getDate() - gridStart.getDay());
+            const todayKey = this.formatCalendarDate(new Date());
+            const weekdayHtml = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(function (day) {
+                return `<div class="seerrfin-calendar-weekday">${day}</div>`;
+            }).join('');
+            let cells = '';
+
+            for (let i = 0; i < 42; i++) {
+                const date = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i);
+                const key = this.formatCalendarDate(date);
+                const classes = [
+                    'seerrfin-calendar-day',
+                    date.getMonth() === monthDate.getMonth() ? '' : 'is-outside',
+                    key === todayKey ? 'is-today' : ''
+                ].filter(Boolean).join(' ');
+                const dayItems = byDay[key] || [];
+                cells += `
+                    <div class="${classes}">
+                        <div class="seerrfin-calendar-day-number">${date.getDate()}</div>
+                        <div class="seerrfin-calendar-day-items">${dayItems.map(this.renderCalendarItem.bind(this)).join('')}</div>
+                    </div>`;
+            }
+
+            const emptyHtml = items && items.length ? '' : '<div class="seerrfin-empty-row padded-left padded-right">No monitored Radarr or Sonarr releases for this month.</div>';
+            return `${emptyHtml}<div class="seerrfin-calendar-grid padded-left padded-right">${weekdayHtml}${cells}</div>`;
+        },
+
+        renderCalendarItem: function (item) {
+            const type = String(item.type || item.Type || '').toLowerCase();
+            const source = String(item.source || item.Source || '').toLowerCase();
+            const title = item.title || item.Title || 'Unknown';
+            const episodeTitle = item.episodeTitle || item.EpisodeTitle || '';
+            const episodeCode = item.episodeCode || item.EpisodeCode || '';
+            const openUrl = item.openUrl || item.OpenUrl || '';
+            const hasFile = item.hasFile || item.HasFile;
+            const safeTitle = this.escapeHtml(title);
+            const subtitle = type === 'episode'
+                ? [episodeCode, episodeTitle].filter(Boolean).join(' - ')
+                : (hasFile ? 'Downloaded' : 'Movie release');
+            const tag = source === 'sonarr' ? 'Sonarr' : 'Radarr';
+            const content = `
+                <span class="seerrfin-calendar-item-source">${this.escapeHtml(tag)}</span>
+                <span class="seerrfin-calendar-item-title">${safeTitle}</span>
+                ${subtitle ? `<span class="seerrfin-calendar-item-subtitle">${this.escapeHtml(subtitle)}</span>` : ''}`;
+
+            return openUrl
+                ? `<button type="button" class="seerrfin-calendar-item seerrfin-calendar-item--${source}" data-open-url="${this.escapeHtml(openUrl)}" title="${safeTitle}">${content}</button>`
+                : `<div class="seerrfin-calendar-item seerrfin-calendar-item--${source}" title="${safeTitle}">${content}</div>`;
+        },
+
         fetchDiscover: function (path, query) {
             let url = ApiClient.getUrl('SeerrFin/' + path);
             if (query) {
@@ -1377,6 +1642,7 @@ if (typeof window.seerrFinPlugin === 'undefined') {
                     tabBarOrder: data && data.tabBarOrder
                 };
                 self._displaySettings = {
+                    JellyseerrBrowseUrl: data && (data.jellyseerrBrowseUrl || data.JellyseerrBrowseUrl) || '',
                     StreamingServiceUseImages: self.readConfigBool(
                         data,
                         'StreamingServiceUseImages',
@@ -1451,6 +1717,7 @@ if (typeof window.seerrFinPlugin === 'undefined') {
                 log.warn('display settings fetch failed, using defaults', err);
                 self._tabSettingsSnapshot = null;
                 self._displaySettings = {
+                    JellyseerrBrowseUrl: '',
                     StreamingServiceUseImages: true,
                     StudioNetworkUseImages: true,
                     GenreUseBackdrops: true,
@@ -2170,14 +2437,57 @@ if (typeof window.seerrFinPlugin === 'undefined') {
 
         buildDiscoverYearText: function (item) {
             const self = this;
-            const date = new Date(self.getField(item, 'PremiereDate', 'premiereDate', 'releaseDate', 'firstAirDate') || '');
+            const rawDate = self.getField(item, 'PremiereDate', 'premiereDate', 'releaseDate', 'firstAirDate') || '';
+            const date = new Date(rawDate);
             const year = Number.isNaN(date.getFullYear()) ? '' : date.getFullYear();
             const rating = Number(self.getField(item, 'CommunityRating', 'communityRating') || 0);
             const starIcon = '<span class="material-icons" style="font-size:14px;vertical-align:middle;color:#FFD700;">star</span>';
+            const releaseText = self.formatDiscoverReleaseText(rawDate);
             const yearText = rating
-                ? `${starIcon} ${rating.toFixed(1)} • ${year}`
-                : `${starIcon} - • ${year}`;
+                ? `${starIcon} ${rating.toFixed(1)} • ${releaseText || year}`
+                : `${starIcon} - • ${releaseText || year}`;
             return { year: year, yearText: yearText };
+        },
+
+        formatDiscoverReleaseText: function (dateValue) {
+            if (!dateValue) {
+                return '';
+            }
+
+            const date = new Date(dateValue);
+            if (isNaN(date.getTime()) || date.getFullYear() <= 1970) {
+                return '';
+            }
+
+            const formatted = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+            return date.getTime() > Date.now() ? 'Releases ' + formatted : formatted;
+        },
+
+        getSeerrBrowseBaseUrl: function () {
+            const settings = this._displaySettings || {};
+            return (this.SEERR_BASE_URL || settings.JellyseerrBrowseUrl || settings.jellyseerrBrowseUrl || '').replace(/\/+$/, '');
+        },
+
+        buildDiscoverActionButtons: function (mediaId, mediaType, safeName) {
+            const safeId = this.escapeHtml(String(mediaId || ''));
+            const safeType = this.escapeHtml(mediaType || '');
+            const seerrBase = this.getSeerrBrowseBaseUrl();
+            const servarrBase = mediaType === 'tv' ? this.SONARR_BASE_URL : this.RADARR_BASE_URL;
+            const servarrLabel = mediaType === 'tv' ? 'Sonarr' : 'Radarr';
+            const servarrClass = mediaType === 'tv' ? 'seerrfin-discover-action--sonarr' : 'seerrfin-discover-action--radarr';
+            const servarrUrl = servarrBase ? servarrBase.replace(/\/+$/, '') + '/add/new?term=tmdb:' + encodeURIComponent(mediaId) : '';
+            const seerrSegment = mediaType === 'tv' ? 'tv' : 'movie';
+            const seerrUrl = seerrBase ? seerrBase + '/' + seerrSegment + '/' + encodeURIComponent(mediaId) : '';
+
+            const seerrButton = seerrUrl ? `
+                <button type="button" class="seerrfin-discover-action seerrfin-discover-action--seerr" data-open-url="${this.escapeHtml(seerrUrl)}" aria-label="Open ${safeName} in Seerr" title="Open in Seerr">Seerr</button>` : `
+                <button type="button" class="seerrfin-discover-action seerrfin-discover-action--seerr discover-requestbutton" data-id="${safeId}" data-media-type="${safeType}" aria-label="Request ${safeName}" title="Request">Seerr</button>`;
+
+            return `
+                <div class="seerrfin-discover-actions">
+                    ${seerrButton}
+                    <button type="button" class="seerrfin-discover-action ${servarrClass}" data-open-url="${this.escapeHtml(servarrUrl)}" aria-label="Open ${safeName} in ${servarrLabel}" title="Open in ${servarrLabel}">${servarrLabel}</button>
+                </div>`;
         },
 
         createDiscoverPosterCards: function (items, forGrid, options) {
@@ -2206,6 +2516,7 @@ if (typeof window.seerrFinPlugin === 'undefined') {
 
                 const safeUrl = self.escapeHtml(posterUrl || '');
                 const imageAttrs = posterUrl ? ` data-src="${safeUrl}"` : '';
+                const actionButtonsHtml = interactive ? self.buildDiscoverActionButtons(mediaId, mediaType, safeName) : '';
                 const overlayHtml = interactive ? `
                     <div class="cardOverlayContainer">
                         <div class="cardImageContainer"></div>
@@ -2239,6 +2550,7 @@ if (typeof window.seerrFinPlugin === 'undefined') {
                                 <div class="cardPadder ${padderType} lazy-hidden-children"></div>
                                 <div class="cardImageContainer coveredImage cardContent lazy lazy-hidden"${imageAttrs} aria-label="${safeName}"></div>
                                 ${overlayHtml}
+                                ${actionButtonsHtml}
                                 ${chromeHtml}
                             </div>
                             ${metaHtml}
@@ -2278,6 +2590,7 @@ if (typeof window.seerrFinPlugin === 'undefined') {
                 const safeBackdropPath = self.escapeHtml(tmdbBackdropPath);
                 const fallbackAttr = safeFallback ? ` data-fallback-src="${safeFallback}"` : '';
                 const backdropPathAttr = safeBackdropPath ? ` data-tmdb-backdrop-path="${safeBackdropPath}"` : '';
+                const actionButtonsHtml = interactive ? self.buildDiscoverActionButtons(mediaId, mediaType, safeName) : '';
                 const overlayHtml = interactive ? `
                     <div class="cardOverlayContainer">
                         <div class="cardImageContainer"></div>
@@ -2310,6 +2623,7 @@ if (typeof window.seerrFinPlugin === 'undefined') {
                                     <span class="seerrfin-discover-overlay-title seerrfin-box-label">${safeName}</span>
                                 </div>
                                 ${overlayHtml}
+                                ${actionButtonsHtml}
                                 ${chromeHtml}
                             </div>
                             ${metaHtml}
@@ -2832,7 +3146,16 @@ if (typeof window.seerrFinPlugin === 'undefined') {
         bindCardClickHandler: function () {
             // Capturing so card opens our modal instead of jellyfin detail page
             document.addEventListener('click', function (e) {
-                if (e.target.closest('.discover-requestbutton')) {
+                const openButton = e.target.closest('.seerrfin-discover-action[data-open-url]');
+                if (openButton) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    window.open(openButton.getAttribute('data-open-url'), '_blank', 'noopener,noreferrer');
+                    return;
+                }
+
+                if (e.target.closest('.discover-requestbutton, .seerrfin-discover-action')) {
                     return;
                 }
 

@@ -330,6 +330,10 @@ public class JellyseerrRequestsService
                 ?? media?.Value<string>("name")
                 ?? "Unknown",
             ["year"] = ExtractYear(details?["releaseDate"]?.ToString() ?? details?["firstAirDate"]?.ToString()),
+            ["releaseDate"] = details?["releaseDate"] ?? details?["firstAirDate"],
+            ["digitalReleaseDate"] = details?["digitalReleaseDate"],
+            ["physicalReleaseDate"] = details?["physicalReleaseDate"],
+            ["nextAirDate"] = details?["nextEpisodeToAir"]?["airDate"] ?? details?["nextAiring"]?["airDate"],
             ["posterUrl"] = string.IsNullOrWhiteSpace(posterPath) ? null : $"https://image.tmdb.org/t/p/w300{posterPath}",
             ["backdropUrl"] = string.IsNullOrWhiteSpace(backdropPath) ? null : $"https://image.tmdb.org/t/p/w780{backdropPath}",
             ["mediaStatusLabel"] = GetMediaStatusLabel(requestStatus, mediaStatus),

@@ -10,9 +10,6 @@ public class SeerrFinTabConfig
 
     public static List<SeerrFinTabConfig> CreateDefaults() =>
     [
-        new() { Id = "movies", Title = "Movies" },
-        new() { Id = "tv", Title = "TV Shows" },
-        new() { Id = "requests", Title = "Requests" },
-        new() { Id = "letterboxd", Title = "Letterboxd" }
+        new() { Id = "requests", Title = "Requests" }
     ];
 }

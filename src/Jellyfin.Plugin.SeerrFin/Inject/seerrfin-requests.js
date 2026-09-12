@@ -222,6 +222,52 @@ window.seerrFinLog = window.seerrFinLog || {
         return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
     }
 
+    function formatReleaseDate(dateStr) {
+        if (!dateStr) {
+            return '';
+        }
+
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) {
+            return '';
+        }
+
+        return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function buildReleaseMeta(item) {
+        const parts = [];
+        const mediaType = item.type === 'tv' ? 'tv' : 'movie';
+        const status = (item.mediaStatusLabel || '').toLowerCase();
+
+        if (mediaType === 'tv') {
+            const firstAir = formatReleaseDate(item.releaseDate);
+            const nextAir = formatReleaseDate(item.nextAirDate);
+            if (firstAir) {
+                parts.push('First aired ' + firstAir);
+            }
+            if (nextAir && status !== 'available') {
+                parts.push('Next airs ' + nextAir);
+            }
+            return parts;
+        }
+
+        const release = formatReleaseDate(item.releaseDate);
+        const digital = formatReleaseDate(item.digitalReleaseDate);
+        const physical = formatReleaseDate(item.physicalReleaseDate);
+        if (release) {
+            parts.push((new Date(item.releaseDate).getTime() > Date.now() ? 'Releases ' : 'Released ') + release);
+        }
+        if (digital && status !== 'available') {
+            parts.push('Digital ' + digital);
+        }
+        if (physical && status !== 'available') {
+            parts.push('Physical ' + physical);
+        }
+
+        return parts;
+    }
+
     function chipClassForStatus(label) {
         const normalized = (label || '').toLowerCase();
         if (normalized.includes('available') && !normalized.includes('partially')) {
@@ -395,7 +441,7 @@ window.seerrFinLog = window.seerrFinLog || {
             name: item.title,
             mediaType: mediaType,
             SourceType: mediaType,
-            PremiereDate: item.year ? item.year + '-01-01' : null,
+            PremiereDate: item.releaseDate || item.nextAirDate || (item.year ? item.year + '-01-01' : null),
             ProviderIds: providerIds
         };
     }
@@ -504,6 +550,8 @@ window.seerrFinLog = window.seerrFinLog || {
 
         const seasonNumbers = Array.isArray(item.seasonNumbers) ? item.seasonNumbers : [];
         const seasonsHtml = item.type === 'tv' && seasonNumbers.length ? `<div class="seerrfin-request-meta">Requested seasons: <span class="seerrfin-request-meta-light">${escapeHtml(seasonNumbers.join(', '))}</span></div>` : '';
+        const releaseParts = buildReleaseMeta(item);
+        const releaseHtml = releaseParts.length ? `<div class="seerrfin-request-meta">${releaseParts.map(escapeHtml).join(' &bull; ')}</div>` : '';
 
         const progress = getServarrProgress(item);
         const progressSpacerHtml = progress && !isLandscape ? '<div class="seerrfin-request-progress-spacer"></div>' : '';
@@ -519,6 +567,7 @@ window.seerrFinLog = window.seerrFinLog || {
                     <span>Requested by</span> ${avatarHtml}
                     <span class="seerrfin-request-meta-light">${escapeHtml(item.requestedBy || 'Unknown')}</span>${timeAgoHtml}
                 </div>
+                ${releaseHtml}
                 ${seasonsHtml}
                 ${progressSpacerHtml}
                 ${progressHtml}
@@ -866,8 +915,8 @@ window.seerrFinLog = window.seerrFinLog || {
         return `
             <div class="verticalSection seerrfin-requests-panel">
                 <div class="sectionTitleContainer sectionTitleContainer-cards padded-left padded-right">
-                    <h2 class="sectionTitle sectionTitle-cards">Requests</h2>
-                    <button type="button" class="seerrfin-requests-reload" aria-label="Reload requests" title="Reload requests">
+                    <h2 class="sectionTitle sectionTitle-cards">Downloads</h2>
+                    <button type="button" class="seerrfin-requests-reload" aria-label="Reload downloads" title="Reload downloads">
                         <span class="material-icons" aria-hidden="true">refresh</span>
                     </button>
                 </div>
