@@ -78,7 +78,7 @@ public class JellyseerrProxyService
         CancellationToken cancellationToken)
     {
         string cacheKey = BuildUserCacheKey(config, username);
-        if (UserIdCache.TryGetValue(cacheKey, out CachedSeerrUser cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
+        if (UserIdCache.TryGetValue(cacheKey, out CachedSeerrUser? cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
         {
             return cached.UserId;
         }

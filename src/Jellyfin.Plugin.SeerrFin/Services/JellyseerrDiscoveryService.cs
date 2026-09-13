@@ -632,7 +632,7 @@ public class JellyseerrDiscoveryService
     private static int? ResolveJellyseerrUserId(HttpClient client, PluginConfiguration config, string username)
     {
         string cacheKey = BuildUserCacheKey(config, username);
-        if (UserIdCache.TryGetValue(cacheKey, out CachedSeerrUser cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
+        if (UserIdCache.TryGetValue(cacheKey, out CachedSeerrUser? cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
         {
             return cached.UserId;
         }
