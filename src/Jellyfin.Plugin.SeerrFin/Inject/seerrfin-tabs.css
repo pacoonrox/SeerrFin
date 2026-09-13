@@ -19,6 +19,7 @@ a[data-seerrfin-menu-nav]:focus-visible {
 
 .seerrfin-requests-hub-nav {
     display: flex;
+    align-items: center;
     gap: 0.5em;
     flex-wrap: wrap;
     padding-top: 1em;
@@ -40,6 +41,13 @@ a[data-seerrfin-menu-nav]:focus-visible {
 .seerrfin-requests-hub-tab.is-active {
     background: var(--jf-palette-primary-main, #00a4dc);
     color: var(--jf-palette-primary-contrastText, #fff);
+}
+
+.seerrfin-requests-hub-search {
+    margin-left: auto;
+    min-width: 2.6em;
+    height: 2.6em;
+    border-radius: 0.35em;
 }
 
 .seerrfin-requests-hub-pane {
@@ -400,6 +408,11 @@ a[data-seerrfin-menu-nav]:focus-visible {
 
 .seerrfin-search-section {
     margin-bottom: 1.5em;
+}
+
+.seerrfin-search-section .itemsContainer > .seerrfin-empty-row {
+    flex: 0 0 auto;
+    width: 100%;
 }
 
 .seerrfin-search-subtitle {

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net.Http.Headers;
 using Jellyfin.Plugin.SeerrFin.Configuration;
@@ -17,6 +18,8 @@ public class JellyseerrDiscoveryService
 
     private readonly ImageCacheService _imageCacheService;
     private readonly ILogger<JellyseerrDiscoveryService> _logger;
+    private static readonly TimeSpan UserCacheTtl = TimeSpan.FromMinutes(5);
+    private static readonly ConcurrentDictionary<string, CachedSeerrUser> UserIdCache = new(StringComparer.OrdinalIgnoreCase);
 
     public JellyseerrDiscoveryService(
         ImageCacheService imageCacheService,
@@ -56,7 +59,7 @@ public class JellyseerrDiscoveryService
         }
 
         using HttpClient client = CreateClient(config);
-        int? jellyseerrUserId = ResolveJellyseerrUserId(client, username);
+        int? jellyseerrUserId = ResolveJellyseerrUserId(client, config, username);
         if (jellyseerrUserId == null)
         {
             return EmptyResult();
@@ -97,7 +100,7 @@ public class JellyseerrDiscoveryService
                     continue;
                 }
 
-                BaseItemDto? dto = MapDiscoverItem(item, mapping);
+                BaseItemDto? dto = MapDiscoverItem(item, mapping, cacheImages: false);
                 if (dto != null)
                 {
                     items.Add(dto);
@@ -132,7 +135,7 @@ public class JellyseerrDiscoveryService
         }
 
         using HttpClient client = CreateClient(config);
-        int? jellyseerrUserId = ResolveJellyseerrUserId(client, username);
+        int? jellyseerrUserId = ResolveJellyseerrUserId(client, config, username);
         if (jellyseerrUserId == null)
         {
             return EmptyResult();
@@ -454,7 +457,7 @@ public class JellyseerrDiscoveryService
         using HttpClient client = CreateClient(config);
         if (!string.IsNullOrWhiteSpace(username))
         {
-            int? jellyseerrUserId = ResolveJellyseerrUserId(client, username);
+            int? jellyseerrUserId = ResolveJellyseerrUserId(client, config, username);
             if (jellyseerrUserId != null)
             {
                 client.DefaultRequestHeaders.Add("X-Api-User", jellyseerrUserId.ToString());
@@ -494,7 +497,7 @@ public class JellyseerrDiscoveryService
         using HttpClient client = CreateClient(config);
         if (!string.IsNullOrWhiteSpace(username))
         {
-            int? jellyseerrUserId = ResolveJellyseerrUserId(client, username);
+            int? jellyseerrUserId = ResolveJellyseerrUserId(client, config, username);
             if (jellyseerrUserId != null)
             {
                 client.DefaultRequestHeaders.Add("X-Api-User", jellyseerrUserId.ToString());
@@ -527,7 +530,7 @@ public class JellyseerrDiscoveryService
         }
     }
 
-    private BaseItemDto? MapDiscoverItem(JObject item, DiscoverItemFilterOptions filterOptions)
+    private BaseItemDto? MapDiscoverItem(JObject item, DiscoverItemFilterOptions filterOptions, bool cacheImages = true)
     {
         PluginConfiguration config = SeerrFinPlugin.Instance.Configuration;
         AdvancedDiscoverySettings discovery = AdvancedSettingsHelper.Resolve(config).Discovery;
@@ -576,18 +579,21 @@ public class JellyseerrDiscoveryService
 
         string posterPath = item.Value<string>("posterPath") ?? string.Empty;
         string posterSize = string.IsNullOrWhiteSpace(tmdb.PosterImageSize) ? "w600_and_h900_bestv2" : tmdb.PosterImageSize;
-        string posterUrl = string.IsNullOrEmpty(posterPath)
+        string posterSourceUrl = string.IsNullOrEmpty(posterPath)
             ? string.Empty
-            : ImageCacheHelper.GetCachedImageUrl(
-                _imageCacheService,
-                $"https://image.tmdb.org/t/p/{posterSize}{posterPath}",
-                _logger);
+            : $"https://image.tmdb.org/t/p/{posterSize}{posterPath}";
+        string posterUrl = string.IsNullOrEmpty(posterSourceUrl)
+            ? string.Empty
+            : ResolveDiscoverImageUrl(posterSourceUrl, cacheImages);
 
         string backdropPath = item.Value<string>("backdropPath") ?? item.Value<string>("backdrop_path") ?? string.Empty;
         string backdropSize = string.IsNullOrWhiteSpace(tmdb.BackdropImageSize) ? "w780" : tmdb.BackdropImageSize;
-        string backdropUrl = string.IsNullOrEmpty(backdropPath)
+        string backdropSourceUrl = string.IsNullOrEmpty(backdropPath)
             ? string.Empty
-            : ImageCacheHelper.GetCachedImageUrl(_imageCacheService, $"https://image.tmdb.org/t/p/{backdropSize}{backdropPath}", _logger);
+            : $"https://image.tmdb.org/t/p/{backdropSize}{backdropPath}";
+        string backdropUrl = string.IsNullOrEmpty(backdropSourceUrl)
+            ? string.Empty
+            : ResolveDiscoverImageUrl(backdropSourceUrl, cacheImages);
 
         float rating = item.Value<float?>("vote_average") ?? item.Value<float?>("voteAverage") ?? 0f;
         string? mediaType = item.Value<string>("mediaType");
@@ -612,6 +618,9 @@ public class JellyseerrDiscoveryService
         };
     }
 
+    private string ResolveDiscoverImageUrl(string sourceUrl, bool cacheImages) =>
+        cacheImages ? ImageCacheHelper.GetCachedImageUrl(_imageCacheService, sourceUrl, _logger) : sourceUrl;
+
     private static HttpClient CreateClient(PluginConfiguration config)
     {
         HttpClient client = new() { BaseAddress = new Uri(config.JellyseerrUrl!) };
@@ -620,15 +629,31 @@ public class JellyseerrDiscoveryService
     }
 
     // Match Jellyfin username to linked Seerr user for per-user X-Api-User header.
-    private static int? ResolveJellyseerrUserId(HttpClient client, string username)
+    private static int? ResolveJellyseerrUserId(HttpClient client, PluginConfiguration config, string username)
     {
+        string cacheKey = BuildUserCacheKey(config, username);
+        if (UserIdCache.TryGetValue(cacheKey, out CachedSeerrUser cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
+        {
+            return cached.UserId;
+        }
+
         HttpResponseMessage usersResponse = client.GetAsync($"/api/v1/user?q={Uri.EscapeDataString(username)}").GetAwaiter().GetResult();
         string userResponseRaw = usersResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-        return JObject.Parse(userResponseRaw).Value<JArray>("results")?
+        int? userId = usersResponse.IsSuccessStatusCode
+            ? JObject.Parse(userResponseRaw).Value<JArray>("results")?
             .OfType<JObject>()
             .FirstOrDefault(x => string.Equals(x.Value<string>("jellyfinUsername"), username, StringComparison.OrdinalIgnoreCase))
-            ?.Value<int>("id");
+            ?.Value<int>("id")
+            : null;
+
+        UserIdCache[cacheKey] = new CachedSeerrUser(userId, DateTimeOffset.UtcNow.Add(UserCacheTtl));
+        return userId;
     }
+
+    private static string BuildUserCacheKey(PluginConfiguration config, string username) =>
+        $"{config.JellyseerrUrl?.TrimEnd('/') ?? string.Empty}|{username.Trim()}";
+
+    private sealed record CachedSeerrUser(int? UserId, DateTimeOffset ExpiresAt);
 
     private static int? GetMediaStatus(JObject item)
     {

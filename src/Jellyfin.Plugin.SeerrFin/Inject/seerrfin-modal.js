@@ -182,10 +182,14 @@ window.seerrFinLog = window.seerrFinLog || {
             releaseDate: raw.release_date,
             runtime: raw.runtime,
             originalLanguage: raw.original_language,
+            status: raw.status,
+            originCountry: raw.origin_country || [],
+            productionCountries: raw.production_countries || [],
             adult: raw.adult,
             genres: raw.genres || [],
             credits: raw.credits || {},
-            releaseDates: raw.release_dates || {}
+            releaseDates: raw.release_dates || {},
+            watchProviders: raw['watch/providers'] || raw.watchProviders || {}
         };
 
         if (raw.videos && raw.videos.results) {
@@ -210,11 +214,17 @@ window.seerrFinLog = window.seerrFinLog || {
             voteAverage: raw.vote_average,
             voteCount: raw.vote_count,
             firstAirDate: raw.first_air_date,
+            nextAirDate: raw.next_episode_to_air && raw.next_episode_to_air.air_date,
             episodeRunTime: raw.episode_run_time || [],
             originalLanguage: raw.original_language,
+            status: raw.status,
+            originCountry: raw.origin_country || [],
+            productionCountries: raw.production_countries || [],
+            networks: raw.networks || [],
             genres: raw.genres || [],
             credits: raw.credits || {},
-            contentRatings: raw.content_ratings || {}
+            contentRatings: raw.content_ratings || {},
+            watchProviders: raw['watch/providers'] || raw.watchProviders || {}
         };
 
         if (raw.videos && raw.videos.results) {
@@ -270,8 +280,8 @@ window.seerrFinLog = window.seerrFinLog || {
         const isTv = mediaType === 'tv';
         const segment = isTv ? 'tv' : 'movie';
         const append = isTv
-            ? 'videos,credits,content_ratings,external_ids'
-            : 'videos,credits,release_dates,external_ids';
+            ? 'videos,credits,content_ratings,external_ids,watch/providers'
+            : 'videos,credits,release_dates,external_ids,watch/providers';
         let detailsUrl = 'https://api.themoviedb.org/3/' + segment + '/' + mediaId;
         detailsUrl = appendTmdbQuery(detailsUrl, 'append_to_response', append);
 
@@ -502,6 +512,164 @@ window.seerrFinLog = window.seerrFinLog || {
             return dateStr;
         }
         return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    }
+
+    function getRegionCode() {
+        const locale = navigator.language || 'en-US';
+        const parts = locale.split('-');
+        return (parts[1] || 'US').toUpperCase();
+    }
+
+    function getRegionNames() {
+        try {
+            if (typeof Intl !== 'undefined' && Intl.DisplayNames) {
+                return new Intl.DisplayNames([navigator.language || 'en'], { type: 'region' });
+            }
+        } catch (err) {
+            // Fall back to country codes.
+        }
+        return null;
+    }
+
+    function formatLanguage(code) {
+        const value = String(code || '').trim();
+        if (!value) {
+            return '';
+        }
+        try {
+            if (typeof Intl !== 'undefined' && Intl.DisplayNames) {
+                const names = new Intl.DisplayNames([navigator.language || 'en'], { type: 'language' });
+                return names.of(value) || value.toUpperCase();
+            }
+        } catch (err) {
+            // Fall back to ISO code.
+        }
+        return value.toUpperCase();
+    }
+
+    function countryFlag(code) {
+        const value = String(code || '').toUpperCase();
+        if (!/^[A-Z]{2}$/.test(value)) {
+            return '';
+        }
+        return value.replace(/./g, function (char) {
+            return String.fromCodePoint(127397 + char.charCodeAt(0));
+        });
+    }
+
+    function formatCountry(code) {
+        const value = String(code || '').toUpperCase();
+        if (!value) {
+            return '';
+        }
+        const names = getRegionNames();
+        const name = names ? names.of(value) : value;
+        const flag = countryFlag(value);
+        return (flag ? flag + ' ' : '') + (name || value);
+    }
+
+    function getProductionCountry(data) {
+        const countries = data.productionCountries || data.production_countries || [];
+        const first = Array.isArray(countries) && countries.length ? countries[0] : null;
+        const code = first && (first.iso_3166_1 || first.iso31661);
+        if (code) {
+            return formatCountry(code);
+        }
+
+        const origin = data.originCountry || data.origin_country || [];
+        return Array.isArray(origin) && origin.length ? formatCountry(origin[0]) : '';
+    }
+
+    function getNetworkName(data) {
+        const networks = data.networks || [];
+        if (!Array.isArray(networks) || !networks.length) {
+            return '';
+        }
+        return networks.map(function (network) { return network.name; }).filter(Boolean).join(', ');
+    }
+
+    function getWatchProviderItems(data) {
+        const providers = data.watchProviders || data['watch/providers'];
+        const results = providers && providers.results;
+        if (!results) {
+            return [];
+        }
+
+        const region = results[getRegionCode()] || results.US || Object.keys(results).map(function (key) {
+            return results[key];
+        }).find(function (entry) {
+            return entry && (entry.flatrate || entry.ads || entry.free);
+        });
+
+        if (!region) {
+            return [];
+        }
+
+        const merged = []
+            .concat(region.flatrate || [])
+            .concat(region.ads || [])
+            .concat(region.free || []);
+        const seen = {};
+        return merged.filter(function (provider) {
+            const id = provider && provider.provider_id;
+            if (!id || seen[id]) {
+                return false;
+            }
+            seen[id] = true;
+            return !!provider.logo_path;
+        }).slice(0, 6);
+    }
+
+    function renderProviderLogos(data) {
+        const providers = getWatchProviderItems(data);
+        if (!providers.length) {
+            return '';
+        }
+
+        return `
+            <div class="bst-sidebar-provider-row">
+                ${providers.map(function (provider) {
+                    const name = provider.provider_name || 'Streaming provider';
+                    return `
+                        <span class="bst-provider-logo" title="${escapeHtml(name)}">
+                            <img alt="${escapeHtml(name)}" src="${tmdbImage(provider.logo_path, 'w92')}" />
+                        </span>`;
+                }).join('')}
+            </div>`;
+    }
+
+    function renderMetadataRows(data, mediaType, runtime, endsAt, language, releaseLabel, certification, tmdbId) {
+        const rows = [];
+        const status = data.status || '';
+        const country = getProductionCountry(data);
+        const network = mediaType === 'tv' ? getNetworkName(data) : '';
+        const nextAirLabel = mediaType === 'tv' ? formatReleaseDate(data.nextAirDate || data.next_episode_to_air?.air_date) : '';
+
+        if (mediaType === 'tv') {
+            if (status) rows.push(['Status', status]);
+            if (releaseLabel) rows.push(['First Air Date', releaseLabel]);
+            if (nextAirLabel) rows.push(['Next Air Date', nextAirLabel]);
+            if (language) rows.push(['Original Language', language]);
+            if (country) rows.push(['Production Country', country]);
+            if (network) rows.push(['Network', network]);
+        } else {
+            if (status) rows.push(['Status', status]);
+            if (releaseLabel) rows.push(['Release Date', releaseLabel]);
+            if (runtime) rows.push(['Runtime', runtime + (endsAt ? ' • Ends at ' + endsAt : '')]);
+            if (language) rows.push(['Original Language', language]);
+            if (country) rows.push(['Production Country', country]);
+        }
+
+        if (certification) rows.push(['Rating', certification]);
+        if (tmdbId) rows.push(['TMDB ID', String(tmdbId)]);
+
+        return rows.map(function (row) {
+            return `
+                <div class="bst-meta-row">
+                    <span class="bst-label">${escapeHtml(row[0])}</span>
+                    <span class="bst-meta-value">${escapeHtml(row[1])}</span>
+                </div>`;
+        }).join('');
     }
 
     function getCertification(data, mediaType) {
@@ -1101,7 +1269,7 @@ window.seerrFinLog = window.seerrFinLog || {
         const runtimeMinutes = data.runtime || (data.episodeRunTime && data.episodeRunTime[0]);
         const runtime = formatRuntime(runtimeMinutes);
         const endsAt = formatEndsAt(runtimeMinutes);
-        const language = (data.originalLanguage || data.original_language || '').toUpperCase();
+        const language = formatLanguage(data.originalLanguage || data.original_language);
         const releaseLabel = formatReleaseDate(data.releaseDate || data.firstAirDate);
         const certification = getCertification(data, mediaType);
         const genres = data.genres || [];
@@ -1112,6 +1280,8 @@ window.seerrFinLog = window.seerrFinLog || {
         const logoUrl = getLogoImageUrl(data);
         const requestState = getRequestButtonState(data, false);
         const request4kState = getRequestButtonState(data, true);
+        const metadataRows = renderMetadataRows(data, mediaType, runtime, endsAt, language, releaseLabel, certification, tmdbId);
+        const providerLogos = renderProviderLogos(data);
 
         return `
             <div class="bst-popout-wrapper">
@@ -1160,13 +1330,8 @@ window.seerrFinLog = window.seerrFinLog || {
                                                 }).join('')}</div>
                                             </div>
                                             <div class="bst-sidebar" data-quality-slot>
-                                                <div class="bst-sidebar-lines">
-                                                    ${runtime ? `<div><span class="bst-label">Runtime:</span> ${escapeHtml(runtime)}${endsAt ? ` <span class="bst-runtime-sep">•</span> Ends at ${escapeHtml(endsAt)}` : ''}</div>` : ''}
-                                                    ${language ? `<div><span class="bst-label">Language:</span> ${escapeHtml(language)}</div>` : ''}
-                                                    ${releaseLabel ? `<div><span class="bst-label">Release Date:</span> ${escapeHtml(releaseLabel)}</div>` : ''}
-                                                    ${certification ? `<div><span class="bst-label">Rating:</span> ${escapeHtml(certification)}</div>` : ''}
-                                                    ${tmdbId ? `<div><span class="bst-label">ID:</span> ${escapeHtml(String(tmdbId))}</div>` : ''}
-                                                </div>
+                                                ${metadataRows ? `<div class="bst-sidebar-lines">${metadataRows}</div>` : ''}
+                                                ${providerLogos ? `<div class="bst-sidebar-provider-label">Currently Streaming On</div>${providerLogos}` : ''}
                                                 ${tmdbId || imdbId ? `
                                                     <div class="bst-external-links">
                                                         ${tmdbId ? `

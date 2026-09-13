@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Text;
 using Jellyfin.Plugin.SeerrFin.Configuration;
@@ -8,6 +9,8 @@ namespace Jellyfin.Plugin.SeerrFin.Services;
 public class JellyseerrProxyService
 {
     private readonly ILogger<JellyseerrProxyService> _logger;
+    private static readonly TimeSpan UserCacheTtl = TimeSpan.FromMinutes(5);
+    private static readonly ConcurrentDictionary<string, CachedSeerrUser> UserIdCache = new(StringComparer.OrdinalIgnoreCase);
 
     public JellyseerrProxyService(ILogger<JellyseerrProxyService> logger)
     {
@@ -35,7 +38,7 @@ public class JellyseerrProxyService
         using HttpClient client = new() { BaseAddress = new Uri(config.JellyseerrUrl!) };
         client.DefaultRequestHeaders.Add("X-Api-Key", config.JellyseerrApiKey);
 
-        int? jellyseerrUserId = await ResolveJellyseerrUserIdAsync(client, username, cancellationToken).ConfigureAwait(false);
+        int? jellyseerrUserId = await ResolveJellyseerrUserIdAsync(client, config, username, cancellationToken).ConfigureAwait(false);
         if (jellyseerrUserId == null)
         {
             return (404, "{\"error\":true,\"message\":\"Seerr user not linked.\"}", "application/json");
@@ -70,21 +73,37 @@ public class JellyseerrProxyService
 
     private static async Task<int?> ResolveJellyseerrUserIdAsync(
         HttpClient client,
+        PluginConfiguration config,
         string username,
         CancellationToken cancellationToken)
     {
+        string cacheKey = BuildUserCacheKey(config, username);
+        if (UserIdCache.TryGetValue(cacheKey, out CachedSeerrUser cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
+        {
+            return cached.UserId;
+        }
+
         using HttpResponseMessage usersResponse = await client
             .GetAsync($"/api/v1/user?q={Uri.EscapeDataString(username)}", cancellationToken)
             .ConfigureAwait(false);
         string userResponseRaw = await usersResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         if (!usersResponse.IsSuccessStatusCode)
         {
+            UserIdCache[cacheKey] = new CachedSeerrUser(null, DateTimeOffset.UtcNow.Add(UserCacheTtl));
             return null;
         }
 
-        return Newtonsoft.Json.Linq.JObject.Parse(userResponseRaw).Value<Newtonsoft.Json.Linq.JArray>("results")?
+        int? userId = Newtonsoft.Json.Linq.JObject.Parse(userResponseRaw).Value<Newtonsoft.Json.Linq.JArray>("results")?
             .OfType<Newtonsoft.Json.Linq.JObject>()
             .FirstOrDefault(x => string.Equals(x.Value<string>("jellyfinUsername"), username, StringComparison.OrdinalIgnoreCase))
             ?.Value<int>("id");
+
+        UserIdCache[cacheKey] = new CachedSeerrUser(userId, DateTimeOffset.UtcNow.Add(UserCacheTtl));
+        return userId;
     }
+
+    private static string BuildUserCacheKey(PluginConfiguration config, string username) =>
+        $"{config.JellyseerrUrl?.TrimEnd('/') ?? string.Empty}|{username.Trim()}";
+
+    private sealed record CachedSeerrUser(int? UserId, DateTimeOffset ExpiresAt);
 }

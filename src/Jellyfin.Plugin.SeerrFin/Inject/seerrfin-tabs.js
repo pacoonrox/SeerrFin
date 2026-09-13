@@ -577,6 +577,9 @@ if (typeof window.seerrFinPlugin === 'undefined') {
                     <button type="button" class="seerrfin-requests-hub-tab" data-seerrfin-hub-tab="movies" role="tab" aria-selected="false">Movies</button>
                     <button type="button" class="seerrfin-requests-hub-tab" data-seerrfin-hub-tab="downloads" role="tab" aria-selected="false">Downloads</button>
                     <button type="button" class="seerrfin-requests-hub-tab" data-seerrfin-hub-tab="calendar" role="tab" aria-selected="false">Calendar</button>
+                    <button type="button" class="seerrfin-requests-hub-search paper-icon-button-light emby-button" data-seerrfin-hub-search title="Search movies and shows" aria-label="Search movies and shows">
+                        <span class="material-icons search" aria-hidden="true"></span>
+                    </button>
                 </div>
                 <div class="seerrfin-requests-hub-pane is-active" data-seerrfin-hub-pane="tv">
                     <div class="sections seerrfin-tv-sections"></div>
@@ -628,6 +631,14 @@ if (typeof window.seerrFinPlugin === 'undefined') {
                     event.preventDefault();
                     event.stopPropagation();
                     self.shiftCalendarMonth(prev ? -1 : 1);
+                    return;
+                }
+
+                const searchButton = event.target.closest && event.target.closest('[data-seerrfin-hub-search]');
+                if (searchButton) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    window.location.hash = '#/search.html';
                     return;
                 }
 
@@ -3655,7 +3666,7 @@ if (typeof window.seerrFinPlugin === 'undefined') {
 
         showSearchSkeleton: function (searchPage) {
             this.removeSearchSection();
-            const skeleton = this.buildRowSkeleton('Seerr results', 'poster', {
+            const skeleton = this.buildRowSkeleton('Search Results', 'poster', {
                 native: this.shouldUseNativeSearchResults()
             });
             skeleton.classList.add('seerrfin-search-section');
@@ -3705,8 +3716,8 @@ if (typeof window.seerrFinPlugin === 'undefined') {
 
             if (self._lastSearchQuery === query) {
                 const existingSection = searchPage.querySelector('.seerrfin-search-section');
-                if (!existingSection && Array.isArray(self._lastSearchItems) && self._lastSearchItems.length) {
-                    self.renderSearchSection(searchPage, query, self._lastSearchItems);
+                if (!existingSection && Array.isArray(self._lastSearchItems)) {
+                    self.renderSearchSection(searchPage, query, self._lastSearchItems, 'complete');
                 }
                 return;
             }
@@ -3736,44 +3747,53 @@ if (typeof window.seerrFinPlugin === 'undefined') {
                 }
 
                 self._lastSearchItems = result.items;
-                self.renderSearchSection(currentPage, query, result.items);
+                self.renderSearchSection(currentPage, query, result.items, 'complete');
             }).catch(function (err) {
                 if (self._activeSearchToken === token) {
                     self._lastSearchItems = [];
                     log.warn('search failed for "' + query + '"', err);
-                    self.removeSearchSection();
+                    const currentPage = self.findSearchPage();
+                    if (currentPage) {
+                        self.renderSearchSection(currentPage, query, [], 'error');
+                    } else {
+                        self.removeSearchSection();
+                    }
                 }
             });
         },
 
-        renderSearchSection: function (searchPage, query, items) {
+        renderSearchSection: function (searchPage, query, items, state) {
             this.removeSearchSection();
-            if (!items || !items.length) {
-                return;
-            }
 
             const safeQuery = this.escapeHtml(query);
             const useNativeCards = this.shouldUseNativeSearchResults();
             const section = useNativeCards
                 ? this.mountFromHtml(`
                     <div class="verticalSection seerrfin-poster-section seerrfin-search-section seerrfin-section-fadein" data-query="${safeQuery}">
-                        <h2 class="sectionTitle sectionTitle-cards focuscontainer-x padded-left padded-right">Seerr results</h2>
+                        <h2 class="sectionTitle sectionTitle-cards focuscontainer-x padded-left padded-right">Search Results</h2>
                         <div is="emby-itemscontainer" class="itemsContainer scrollSlider focuscontainer-x animatedScrollX" data-monitor="videoplayback,markplayed"></div>
                     </div>`)
                 : this.mountFromHtml(`
                     <div class="verticalSection seerrfin-poster-section seerrfin-search-section seerrfin-section-fadein" data-query="${safeQuery}">
                         <div class="sectionTitleContainer sectionTitleContainer-cards padded-left">
-                            <h2 class="sectionTitle sectionTitle-cards">Seerr results</h2>
+                            <h2 class="sectionTitle sectionTitle-cards">Search Results</h2>
                         </div>
                         <div is="emby-itemscontainer" class="itemsContainer scrollSlider focuscontainer-x"></div>
                     </div>`);
 
             const itemsContainer = section.querySelector('.itemsContainer');
-            itemsContainer.innerHTML = this.createDiscoverCards(items, false, {
-                interactive: true,
-                includeMetaText: true,
-                nativeCards: useNativeCards
-            });
+            if (items && items.length) {
+                itemsContainer.innerHTML = this.createDiscoverCards(items, false, {
+                    interactive: true,
+                    includeMetaText: true,
+                    nativeCards: useNativeCards
+                });
+            } else {
+                const message = state === 'error'
+                    ? 'Search failed. Check Seerr settings and that your Jellyfin user is linked in Seerr.'
+                    : 'No Seerr matches found.';
+                itemsContainer.innerHTML = `<div class="seerrfin-empty-row">${this.escapeHtml(message)}</div>`;
+            }
             this.appendHorizontalScroller(section, itemsContainer, {
                 focusScale: this.getAdvancedCarouselSetting('discoverRowFocusScale', true),
                 scrollEvent: false
@@ -3783,8 +3803,10 @@ if (typeof window.seerrFinPlugin === 'undefined') {
                 return;
             }
 
-            this.initNativeOrCustomCards(itemsContainer, useNativeCards);
-            this.refreshScrollers(section);
+            if (items && items.length) {
+                this.initNativeOrCustomCards(itemsContainer, useNativeCards);
+                this.refreshScrollers(section);
+            }
         },
 
         refreshScrollers: function (container) {
