@@ -238,9 +238,9 @@ public class SeerrFinController : ControllerBase
     }
 
     [HttpGet("CachedImage/{cacheKey}")]
-    public ActionResult GetCachedImage([FromRoute] string cacheKey)
+    public async Task<ActionResult> GetCachedImage([FromRoute] string cacheKey)
     {
-        CachedImageFile? cachedFile = _imageCacheService.GetCachedImageFile(cacheKey);
+        CachedImageFile? cachedFile = await _imageCacheService.GetOrFetchCachedImageFileAsync(cacheKey).ConfigureAwait(false);
         if (cachedFile == null || !System.IO.File.Exists(cachedFile.FilePath))
         {
             return NotFound();

@@ -619,7 +619,7 @@ public class JellyseerrDiscoveryService
     }
 
     private string ResolveDiscoverImageUrl(string sourceUrl, bool cacheImages) =>
-        cacheImages ? ImageCacheHelper.GetCachedImageUrl(_imageCacheService, sourceUrl, _logger) : sourceUrl;
+        cacheImages ? ImageCacheHelper.GetLazyCachedImageUrl(_imageCacheService, sourceUrl) : sourceUrl;
 
     private static HttpClient CreateClient(PluginConfiguration config)
     {

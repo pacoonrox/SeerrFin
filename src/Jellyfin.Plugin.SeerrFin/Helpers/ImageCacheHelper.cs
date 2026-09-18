@@ -53,4 +53,23 @@ public static class ImageCacheHelper
             return fallback ? sourceUrl : string.Empty;
         }
     }
+
+    // Hands out a CachedImage URL without downloading anything. The actual fetch happens lazily,
+    // the first time a client requests that URL, so building a discover row never blocks on image I/O.
+    public static string GetLazyCachedImageUrl(ImageCacheService imageCacheService, string? sourceUrl)
+    {
+        if (string.IsNullOrEmpty(sourceUrl))
+        {
+            return string.Empty;
+        }
+
+        PluginConfiguration? config = SeerrFinPlugin.Instance?.Configuration;
+        if (config != null && AdvancedSettingsHelper.Resolve(config).Tmdb.DirectBrowserImages)
+        {
+            return sourceUrl;
+        }
+
+        string cacheKey = imageCacheService.RegisterSourceUrl(sourceUrl);
+        return $"/SeerrFin/CachedImage/{cacheKey}";
+    }
 }

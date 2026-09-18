@@ -16,6 +16,7 @@ public class ImageCacheService
     private readonly string _cacheDirectory;
     private readonly ConcurrentDictionary<string, CachedImageDto> _imageCache = new();
     private readonly ConcurrentDictionary<string, Task<string?>> _inflightDownloads = new();
+    private readonly ConcurrentDictionary<string, string> _knownSourceUrls = new();
 
     public ImageCacheService(
         ILogger<ImageCacheService> logger,
@@ -52,28 +53,46 @@ public class ImageCacheService
         return await GetOrStartDownload(sourceUrl, cacheKey, cacheTimeoutSeconds).ConfigureAwait(false);
     }
 
-    public CachedImageFile? GetCachedImageFile(string cacheKey)
+    // Pure, no I/O: lets discovery mapping hand out a CachedImage URL before the image is ever downloaded.
+    public string RegisterSourceUrl(string sourceUrl)
     {
-        if (!_imageCache.TryGetValue(cacheKey, out CachedImageDto? cachedInfo))
+        string cacheKey = GenerateCacheKey(sourceUrl);
+        // Already downloaded (or in flight): _imageCache/_inflightDownloads already know the source url,
+        // so skip the write - otherwise every re-registration of an already-cached image (i.e. most of them,
+        // every time a row is reloaded) would pile up here and never get cleared.
+        if (!_imageCache.ContainsKey(cacheKey))
         {
-            return null;
+            _knownSourceUrls[cacheKey] = sourceUrl;
         }
 
-        if (cachedInfo.ExpiresAt > DateTime.UtcNow && File.Exists(cachedInfo.FilePath))
+        return cacheKey;
+    }
+
+    public async Task<CachedImageFile?> GetOrFetchCachedImageFileAsync(string cacheKey)
+    {
+        if (_imageCache.TryGetValue(cacheKey, out CachedImageDto? cachedInfo)
+            && cachedInfo.ExpiresAt > DateTime.UtcNow
+            && File.Exists(cachedInfo.FilePath))
         {
             return BuildCachedImageFile(cachedInfo);
         }
 
-        if (!string.IsNullOrEmpty(cachedInfo.SourceUrl))
+        string? sourceUrl = cachedInfo?.SourceUrl;
+        if (string.IsNullOrEmpty(sourceUrl))
         {
-            int cacheTimeout = SeerrFinPlugin.Instance.Configuration.CacheTimeoutSeconds;
-            string? refreshedKey = GetOrCacheImage(cachedInfo.SourceUrl, cacheTimeout).GetAwaiter().GetResult();
-            if (refreshedKey == cacheKey
-                && _imageCache.TryGetValue(cacheKey, out cachedInfo)
-                && File.Exists(cachedInfo.FilePath))
-            {
-                return BuildCachedImageFile(cachedInfo);
-            }
+            _knownSourceUrls.TryGetValue(cacheKey, out sourceUrl);
+        }
+
+        if (string.IsNullOrEmpty(sourceUrl))
+        {
+            return null;
+        }
+
+        int cacheTimeout = SeerrFinPlugin.Instance.Configuration.CacheTimeoutSeconds;
+        string? refreshedKey = await GetOrCacheImage(sourceUrl, cacheTimeout).ConfigureAwait(false);
+        if (refreshedKey == cacheKey && _imageCache.TryGetValue(cacheKey, out CachedImageDto? freshInfo))
+        {
+            return BuildCachedImageFile(freshInfo);
         }
 
         _imageCache.TryRemove(cacheKey, out _);
@@ -140,6 +159,7 @@ public class ImageCacheService
                 CachedAt = cachedAt,
                 ExpiresAt = cachedAt.AddSeconds(cacheTimeoutSeconds)
             };
+            _knownSourceUrls.TryRemove(cacheKey, out _);
             SaveCacheIndex();
             return cacheKey;
         }
@@ -252,8 +272,15 @@ public class ImageCacheService
         try
         {
             string indexPath = Path.Combine(_cacheDirectory, "cache-index.json");
+            // Write to a uniquely-named temp file then rename over the index so concurrent saves
+            // (now common: images cache in parallel instead of one at a time) can't interleave writes
+            // and corrupt the shared file. Rename is atomic, so the worst case is one save's snapshot
+            // losing to another's, which just means a newly cached entry gets silently re-downloaded
+            // once after a restart - never corruption.
+            string tempPath = Path.Combine(_cacheDirectory, $"cache-index.{Guid.NewGuid():N}.tmp");
             string json = JsonSerializer.Serialize(_imageCache.Values.ToArray(), new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(indexPath, json);
+            File.WriteAllText(tempPath, json);
+            File.Move(tempPath, indexPath, overwrite: true);
         }
         catch (Exception ex)
         {
