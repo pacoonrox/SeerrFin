@@ -269,7 +269,7 @@ public sealed class ServarrProgressService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "SF • failed to load Radarr progress snapshot from {RadarrUrl}", config.RadarrUrl);
+            _logger.LogWarning(ex, "SeerrFin • failed to load Radarr progress snapshot from {RadarrUrl}", config.RadarrUrl);
             return null;
         }
     }
@@ -362,7 +362,7 @@ public sealed class ServarrProgressService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "SF • failed to load Sonarr progress snapshot from {SonarrUrl}", config.SonarrUrl);
+            _logger.LogWarning(ex, "SeerrFin • failed to load Sonarr progress snapshot from {SonarrUrl}", config.SonarrUrl);
             return null;
         }
     }

@@ -28,7 +28,7 @@ public class StartupService : IScheduledTask
 
     public Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("SF • registering file transformations");
+        _logger.LogInformation("SeerrFin • registering file transformations");
 
         // Resolve File Transformation assembly at runtime via reflection
         var fileTransformationAssembly = AssemblyLoadContext.All
@@ -37,21 +37,21 @@ public class StartupService : IScheduledTask
 
         if (fileTransformationAssembly == null)
         {
-            _logger.LogWarning("SF • File Transformation plugin not found. UI injection won't work");
+            _logger.LogWarning("SeerrFin • File Transformation plugin not found. UI injection won't work");
             return Task.CompletedTask;
         }
 
         Type? pluginInterfaceType = fileTransformationAssembly.GetType("Jellyfin.Plugin.FileTransformation.PluginInterface");
         if (pluginInterfaceType == null)
         {
-            _logger.LogWarning("SF • File Transformation PluginInterface type not found");
+            _logger.LogWarning("SeerrFin • File Transformation PluginInterface type not found");
             return Task.CompletedTask;
         }
 
         var registerTransformation = pluginInterfaceType.GetMethod("RegisterTransformation");
         if (registerTransformation == null)
         {
-            _logger.LogWarning("SF • File Transformation RegisterTransformation method not found");
+            _logger.LogWarning("SeerrFin • File Transformation RegisterTransformation method not found");
             return Task.CompletedTask;
         }
 
@@ -70,7 +70,7 @@ public class StartupService : IScheduledTask
 
         Register(IndexHtmlTransformationId, "index.html", nameof(TransformationPatches.IndexHtml));
         Register(WebConfigTransformationId, "config.json", nameof(TransformationPatches.WebConfig));
-        _logger.LogInformation("SF • registered index.html and config.json transformations");
+        _logger.LogInformation("SeerrFin • registered index.html and config.json transformations");
         return Task.CompletedTask;
     }
 

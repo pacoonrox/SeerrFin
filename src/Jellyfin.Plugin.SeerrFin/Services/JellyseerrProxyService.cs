@@ -66,7 +66,7 @@ public class JellyseerrProxyService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "SF • Seerr proxy failed for {Path}", apiPath);
+            _logger.LogWarning(ex, "SeerrFin • Seerr proxy failed for {Path}", apiPath);
             return (502, "{\"error\":true,\"message\":\"Failed to reach Seerr.\"}", "application/json");
         }
     }

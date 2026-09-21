@@ -40,7 +40,7 @@ public static class ImageCacheHelper
             bool fallback = config == null || AdvancedSettingsHelper.Resolve(config).Tmdb.FallbackToOriginalImageUrl;
             if (fallback)
             {
-                logger?.LogWarning("SF • failed to cache image from {SourceUrl}, using original URL", sourceUrl);
+                logger?.LogWarning("SeerrFin • failed to cache image from {SourceUrl}, using original URL", sourceUrl);
                 return sourceUrl;
             }
 
@@ -48,7 +48,7 @@ public static class ImageCacheHelper
         }
         catch (Exception ex)
         {
-            logger?.LogError(ex, "SF • error caching image from {SourceUrl}", sourceUrl);
+            logger?.LogError(ex, "SeerrFin • error caching image from {SourceUrl}", sourceUrl);
             bool fallback = config == null || AdvancedSettingsHelper.Resolve(config).Tmdb.FallbackToOriginalImageUrl;
             return fallback ? sourceUrl : string.Empty;
         }

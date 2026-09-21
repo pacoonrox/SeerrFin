@@ -165,7 +165,7 @@ public class ImageCacheService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "SF • error caching image from {SourceUrl}", sourceUrl);
+            _logger.LogError(ex, "SeerrFin • error caching image from {SourceUrl}", sourceUrl);
             return null;
         }
     }
@@ -179,7 +179,7 @@ public class ImageCacheService
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "SF • failed to read last write time for {FilePath}", cachedInfo.FilePath);
+            _logger.LogDebug(ex, "SeerrFin • failed to read last write time for {FilePath}", cachedInfo.FilePath);
         }
 
         int maxAgeSeconds = Math.Max(0, (int)Math.Ceiling((cachedInfo.ExpiresAt - DateTime.UtcNow).TotalSeconds));
@@ -190,7 +190,7 @@ public class ImageCacheService
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "SF • failed to read file length for {FilePath}", cachedInfo.FilePath);
+            _logger.LogDebug(ex, "SeerrFin • failed to read file length for {FilePath}", cachedInfo.FilePath);
         }
 
         return new CachedImageFile
@@ -218,7 +218,7 @@ public class ImageCacheService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "SF • failed to delete cache file {FilePath}", cachedInfo.FilePath);
+                _logger.LogWarning(ex, "SeerrFin • failed to delete cache file {FilePath}", cachedInfo.FilePath);
             }
         }
     }
@@ -263,7 +263,7 @@ public class ImageCacheService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "SF • error loading cache index");
+            _logger.LogError(ex, "SeerrFin • error loading cache index");
         }
     }
 
@@ -284,7 +284,7 @@ public class ImageCacheService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "SF • error saving cache index");
+            _logger.LogError(ex, "SeerrFin • error saving cache index");
         }
     }
 

@@ -139,7 +139,7 @@ public class JellyseerrDiscoveryService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "SF • failed to search Seerr for {Query}", query);
+                _logger.LogWarning(ex, "SeerrFin • failed to search Seerr for {Query}", query);
                 break;
             }
 
@@ -180,7 +180,7 @@ public class JellyseerrDiscoveryService
         bool hasReleaseTypeFilter = ShouldApplyReleaseTypeFilter(mediaTypeFilter, jellyseerrPath, config);
         if (hasReleaseTypeFilter && string.IsNullOrWhiteSpace(tmdbApiKey))
         {
-            _logger.LogWarning("SF • release type filters are configured but no TMDB API key set");
+            _logger.LogWarning("SeerrFin • release type filters are configured but no TMDB API key set");
             return EmptyResult();
         }
 
@@ -294,8 +294,8 @@ public class JellyseerrDiscoveryService
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, useTmdbReleaseFilter
-                    ? "SF • failed to fetch TMDB discover movies for path {Path}"
-                    : "SF • failed to fetch Seerr path {Path}", jellyseerrPath);
+                    ? "SeerrFin • failed to fetch TMDB discover movies for path {Path}"
+                    : "SeerrFin • failed to fetch Seerr path {Path}", jellyseerrPath);
                 break;
             }
 
@@ -514,7 +514,7 @@ public class JellyseerrDiscoveryService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "SF • failed to fetch Seerr details for {MediaType}/{MediaId}", mediaType, mediaId);
+            _logger.LogWarning(ex, "SeerrFin • failed to fetch Seerr details for {MediaType}/{MediaId}", mediaType, mediaId);
             return null;
         }
     }
@@ -542,7 +542,7 @@ public class JellyseerrDiscoveryService
             HttpResponseMessage response = client.GetAsync(path).GetAwaiter().GetResult();
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("SF • Seerr request failed for {Path} with status {StatusCode}", path, response.StatusCode);
+                _logger.LogWarning("SeerrFin • Seerr request failed for {Path} with status {StatusCode}", path, response.StatusCode);
                 return new JArray();
             }
 
@@ -558,7 +558,7 @@ public class JellyseerrDiscoveryService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "SF • failed to fetch Seerr array from {Path}", path);
+            _logger.LogWarning(ex, "SeerrFin • failed to fetch Seerr array from {Path}", path);
             return new JArray();
         }
     }
@@ -810,7 +810,7 @@ public class JellyseerrDiscoveryService
         using HttpResponseMessage response = new HttpClient().SendAsync(request).GetAwaiter().GetResult();
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogWarning("SF • TMDB trending request failed with status {StatusCode} for {Url}", (int)response.StatusCode, url);
+            _logger.LogWarning("SeerrFin • TMDB trending request failed with status {StatusCode} for {Url}", (int)response.StatusCode, url);
             return null;
         }
 
@@ -860,7 +860,7 @@ public class JellyseerrDiscoveryService
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "SF • failed to fetch TMDB release dates for movie {MovieId}", movieId);
+            _logger.LogDebug(ex, "SeerrFin • failed to fetch TMDB release dates for movie {MovieId}", movieId);
         }
 
         cache[movieId] = matches;
@@ -909,7 +909,7 @@ public class JellyseerrDiscoveryService
         using HttpResponseMessage response = new HttpClient().SendAsync(request).GetAwaiter().GetResult();
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogWarning("SF • TMDB discover request failed with status {StatusCode} for {Url}", (int)response.StatusCode, url);
+            _logger.LogWarning("SeerrFin • TMDB discover request failed with status {StatusCode} for {Url}", (int)response.StatusCode, url);
             return null;
         }
 

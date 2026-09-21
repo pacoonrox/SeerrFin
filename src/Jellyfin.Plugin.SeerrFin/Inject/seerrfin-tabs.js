@@ -2,20 +2,20 @@
 
 window.seerrFinLog = window.seerrFinLog || {
     info: function (msg) {
-        console.log('SF • ' + msg);
+        console.log('SeerrFin • ' + msg);
     },
     warn: function (msg, detail) {
         if (detail !== undefined) {
-            console.warn('SF • ' + msg, detail);
+            console.warn('SeerrFin • ' + msg, detail);
         } else {
-            console.warn('SF • ' + msg);
+            console.warn('SeerrFin • ' + msg);
         }
     },
     error: function (msg, detail) {
         if (detail !== undefined) {
-            console.error('SF • ' + msg, detail);
+            console.error('SeerrFin • ' + msg, detail);
         } else {
-            console.error('SF • ' + msg);
+            console.error('SeerrFin • ' + msg);
         }
     }
 };
