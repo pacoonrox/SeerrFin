@@ -35,7 +35,7 @@ public class JellyseerrDiscoveryService
         return GetDiscoverRow(username, discovery.AnimeDiscoverPath, "tv", startIndex, limit, useSeerrMapping: discovery.UseSeerrMappingForAnime);
     }
 
-    public QueryResult<BaseItemDto> Search(string username, string query, string? language = null)
+    public QueryResult<BaseItemDto> Search(string username, string query, string? language = null, int startIndex = 0, int? limit = null)
     {
         PluginConfiguration config = SeerrFinPlugin.Instance.Configuration;
         if (string.IsNullOrWhiteSpace(config.JellyseerrUrl) ||
@@ -67,58 +67,91 @@ public class JellyseerrDiscoveryService
 
         client.DefaultRequestHeaders.Add("X-Api-User", jellyseerrUserId.ToString());
 
-        try
+        DiscoverItemFilterOptions mapping = ResolveSearchMapping();
+        AdvancedDiscoverySettings discoverySettings = AdvancedSettingsHelper.Resolve(config).Discovery;
+
+        List<BaseItemDto> items = new();
+        int jellyseerrPage = 1;
+        int targetCount = startIndex + Math.Max(1, limit ?? config.RowItemLimit);
+        int skipped = 0;
+        int totalResults = 0;
+
+        while (items.Count < targetCount && jellyseerrPage <= discoverySettings.GridMaxJellyseerrPages)
         {
-            string path = $"/api/v1/search?query={Uri.EscapeDataString(query)}";
-            if (!string.IsNullOrWhiteSpace(language))
+            try
             {
-                path += $"&language={Uri.EscapeDataString(language.Trim())}";
-            }
-
-            HttpResponseMessage response = client.GetAsync(path).GetAwaiter().GetResult();
-            if (!response.IsSuccessStatusCode)
-            {
-                return EmptyResult();
-            }
-
-            string jsonRaw = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-            JObject json = JObject.Parse(jsonRaw);
-            JArray? results = json.Value<JArray>("results");
-            if (results == null || results.Count == 0)
-            {
-                return EmptyResult();
-            }
-
-            DiscoverItemFilterOptions mapping = ResolveSearchMapping();
-            List<BaseItemDto> items = new();
-            foreach (JObject item in results.OfType<JObject>())
-            {
-                string? mediaType = item.Value<string>("mediaType");
-                if (!string.Equals(mediaType, "movie", StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(mediaType, "tv", StringComparison.OrdinalIgnoreCase))
+                string path = $"/api/v1/search?query={Uri.EscapeDataString(query)}&page={jellyseerrPage}";
+                if (!string.IsNullOrWhiteSpace(language))
                 {
-                    continue;
+                    path += $"&language={Uri.EscapeDataString(language.Trim())}";
                 }
 
-                BaseItemDto? dto = MapDiscoverItem(item, mapping, cacheImages: false);
-                if (dto != null)
+                HttpResponseMessage response = client.GetAsync(path).GetAwaiter().GetResult();
+                if (!response.IsSuccessStatusCode)
                 {
+                    break;
+                }
+
+                string jsonRaw = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                JObject json = JObject.Parse(jsonRaw);
+                JArray? results = json.Value<JArray>("results");
+                if (results == null || results.Count == 0)
+                {
+                    break;
+                }
+
+                totalResults = json.Value<int?>("totalResults") ?? json.Value<int?>("total_results") ?? totalResults;
+
+                foreach (JObject item in results.OfType<JObject>())
+                {
+                    if (items.Count >= targetCount)
+                    {
+                        break;
+                    }
+
+                    string? mediaType = item.Value<string>("mediaType");
+                    if (!string.Equals(mediaType, "movie", StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(mediaType, "tv", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    BaseItemDto? dto = MapDiscoverItem(item, mapping, cacheImages: false);
+                    if (dto == null)
+                    {
+                        continue;
+                    }
+
+                    if (skipped < startIndex)
+                    {
+                        skipped++;
+                        continue;
+                    }
+
                     items.Add(dto);
                 }
+
+                int totalPages = json.Value<int?>("totalPages") ?? json.Value<int?>("total_pages") ?? jellyseerrPage;
+                if (jellyseerrPage >= totalPages)
+                {
+                    break;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SF • failed to search Seerr for {Query}", query);
+                break;
             }
 
-            return new QueryResult<BaseItemDto>
-            {
-                Items = items.ToArray(),
-                StartIndex = 0,
-                TotalRecordCount = items.Count
-            };
+            jellyseerrPage++;
         }
-        catch (Exception ex)
+
+        return new QueryResult<BaseItemDto>
         {
-            _logger.LogWarning(ex, "SF • failed to search Seerr for {Query}", query);
-            return EmptyResult();
-        }
+            Items = items,
+            StartIndex = startIndex,
+            TotalRecordCount = totalResults > 0 ? totalResults : items.Count
+        };
     }
 
     public QueryResult<BaseItemDto> GetDiscoverRow(string username, string jellyseerrPath, string? mediaTypeFilter = null, int startIndex = 0, int? limit = null, bool useSeerrMapping = false)

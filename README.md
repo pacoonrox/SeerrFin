@@ -30,6 +30,7 @@ The best way to discover and request Movies and TV Shows by using Seerr directly
 - **Request from Seerr**: Easily request movies and TV shows directly in Jellyfin and select quality profiles and specific seasons (for shows)
 - **Quality recommendations**: See the highest released and most common streaming quality when requesting to know the right quality profile for your request
 - **Requests tab**: Track your Seerr requests with, and open each request open requested content in Seerr, Radarr or Sonarr
+- **Search inside Requests**: A dedicated Search section in the Requests tab shows the same movie and TV results as searching directly in Seerr, so you can find and request content without leaving the tab
 - **Radarr/Sonarr download progress**: See live download progress of requests to see how far along each request is
 - **Letterboxd watchlist sync**: Sync your Letterboxd watchlist into Jellyfin and request all movies from your watchlist at once
 - **Bulk request from Letterboxd**: Select and request multiple movies from your Letterboxd watchlist at once

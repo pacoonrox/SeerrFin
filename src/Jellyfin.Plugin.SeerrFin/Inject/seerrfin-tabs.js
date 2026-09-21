@@ -54,6 +54,15 @@ if (typeof window.seerrFinPlugin === 'undefined') {
         _activeSearchToken: null,
         _calendarMonth: null,
         _calendarLoadId: 0,
+        _hubSearchBound: false,
+        _hubSearchDebounceTimer: null,
+        _hubSearch: {
+            query: '',
+            token: 0,
+            loading: false,
+            loadedCount: 0,
+            total: 0
+        },
 
         TAB_DEFS: {
             requests: { sectionClass: 'seerrfin-requests-hub-sections', defaultTitle: 'Requests' }
@@ -79,6 +88,7 @@ if (typeof window.seerrFinPlugin === 'undefined') {
                 this.bindViewMoreHandler();
                 this.bindRequestsHubNavigation();
                 this.bindModernNavigation();
+                this.bindHubSearch();
                 this.loadDisplaySettings();
                 this.setupSearchIntegration();
             }
@@ -577,9 +587,7 @@ if (typeof window.seerrFinPlugin === 'undefined') {
                     <button type="button" class="seerrfin-requests-hub-tab" data-seerrfin-hub-tab="movies" role="tab" aria-selected="false">Movies</button>
                     <button type="button" class="seerrfin-requests-hub-tab" data-seerrfin-hub-tab="downloads" role="tab" aria-selected="false">Downloads</button>
                     <button type="button" class="seerrfin-requests-hub-tab" data-seerrfin-hub-tab="calendar" role="tab" aria-selected="false">Calendar</button>
-                    <button type="button" class="seerrfin-requests-hub-search paper-icon-button-light emby-button" data-seerrfin-hub-search title="Search movies and shows" aria-label="Search movies and shows">
-                        <span class="material-icons search" aria-hidden="true"></span>
-                    </button>
+                    <button type="button" class="seerrfin-requests-hub-tab" data-seerrfin-hub-tab="search" role="tab" aria-selected="false">Search</button>
                 </div>
                 <div class="seerrfin-requests-hub-pane is-active" data-seerrfin-hub-pane="tv">
                     <div class="sections seerrfin-tv-sections"></div>
@@ -592,8 +600,26 @@ if (typeof window.seerrFinPlugin === 'undefined') {
                 </div>
                 <div class="seerrfin-requests-hub-pane" data-seerrfin-hub-pane="calendar">
                     <div class="sections seerrfin-calendar-sections"></div>
+                </div>
+                <div class="seerrfin-requests-hub-pane" data-seerrfin-hub-pane="search">
+                    ${this.renderHubSearchPane()}
                 </div>`;
             return hub;
+        },
+
+        renderHubSearchPane: function () {
+            return `
+                <div class="seerrfin-hub-search-bar padded-left padded-right">
+                    <span class="material-icons search seerrfin-hub-search-icon" aria-hidden="true"></span>
+                    <input type="search" class="seerrfin-hub-search-input" placeholder="Search movies &amp; TV shows"
+                        autocomplete="off" spellcheck="false" aria-label="Search movies and TV shows">
+                </div>
+                <div class="seerrfin-empty-row padded-left" data-seerrfin-hub-search-empty>Search Seerr for movies and TV shows.</div>
+                <div is="emby-itemscontainer" class="seerrfin-hub-search-items itemsContainer padded-left padded-right vertical-wrap focuscontainer-x" data-monitor="videoplayback,markplayed"></div>
+                <div class="seerrfin-grid-loadmore" data-seerrfin-hub-search-loadmore style="display:none">
+                    <button type="button" class="raised emby-button">Load more</button>
+                </div>
+                <div class="seerrfin-grid-status" data-seerrfin-hub-search-status style="display:none"></div>`;
         },
 
         setRequestsHubTab: function (hub, tabId) {
@@ -610,6 +636,15 @@ if (typeof window.seerrFinPlugin === 'undefined') {
             hub.querySelectorAll('.seerrfin-requests-hub-pane').forEach(function (pane) {
                 pane.classList.toggle('is-active', pane.getAttribute('data-seerrfin-hub-pane') === tabId);
             });
+
+            if (tabId === 'search') {
+                const input = hub.querySelector('.seerrfin-hub-search-input');
+                if (input) {
+                    requestAnimationFrame(function () {
+                        input.focus();
+                    });
+                }
+            }
 
             this.scheduleRender();
         },
@@ -631,14 +666,6 @@ if (typeof window.seerrFinPlugin === 'undefined') {
                     event.preventDefault();
                     event.stopPropagation();
                     self.shiftCalendarMonth(prev ? -1 : 1);
-                    return;
-                }
-
-                const searchButton = event.target.closest && event.target.closest('[data-seerrfin-hub-search]');
-                if (searchButton) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    window.location.hash = '#/search.html';
                     return;
                 }
 
@@ -3138,7 +3165,7 @@ if (typeof window.seerrFinPlugin === 'undefined') {
             // Capturing runs before card navigation handlers
             document.addEventListener('click', function (e) {
                 const btn = e.target.closest('.discover-requestbutton');
-                if (!btn || !btn.closest('.seerrfin-movies-sections, .seerrfin-tv-sections, [data-seerrfin-grid-view], .seerrfin-search-section')) {
+                if (!btn || !btn.closest('.seerrfin-movies-sections, .seerrfin-tv-sections, [data-seerrfin-grid-view], .seerrfin-search-section, [data-seerrfin-hub-pane="search"]')) {
                     return;
                 }
 
@@ -3172,7 +3199,7 @@ if (typeof window.seerrFinPlugin === 'undefined') {
 
                 const card = e.target.closest('.seerrfin-discover-card, [data-seerrfin-native-card="true"]');
                 if (!card || card.classList.contains('seerrfin-discover-card--static') ||
-                    !card.closest('.seerrfin-movies-sections, .seerrfin-tv-sections, [data-seerrfin-grid-view], .seerrfin-search-section')) {
+                    !card.closest('.seerrfin-movies-sections, .seerrfin-tv-sections, [data-seerrfin-grid-view], .seerrfin-search-section, [data-seerrfin-hub-pane="search"]')) {
                     return;
                 }
 
@@ -3673,12 +3700,22 @@ if (typeof window.seerrFinPlugin === 'undefined') {
             this.insertSearchSection(searchPage, skeleton);
         },
 
-        fetchSeerrSearch: function (query) {
-            const language = ((navigator.language || 'en').split('-')[0] || 'en');
-            const url = ApiClient.getUrl('SeerrFin/search') +
+        getSearchLanguage: function () {
+            return (navigator.language || 'en').split('-')[0] || 'en';
+        },
+
+        fetchSeerrSearch: function (query, startIndex, limit) {
+            let url = ApiClient.getUrl('SeerrFin/search') +
                 '?query=' + encodeURIComponent(query) +
-                '&language=' + encodeURIComponent(language) +
+                '&language=' + encodeURIComponent(this.getSearchLanguage()) +
                 '&_=' + Date.now();
+
+            if (startIndex) {
+                url += '&startIndex=' + encodeURIComponent(startIndex);
+            }
+            if (limit) {
+                url += '&limit=' + encodeURIComponent(limit);
+            }
 
             return ApiClient.ajax({
                 url: url,
@@ -3693,6 +3730,188 @@ if (typeof window.seerrFinPlugin === 'undefined') {
                     total: total
                 };
             });
+        },
+
+        getHubSearchElements: function () {
+            const hub = document.querySelector('.seerrfin-requests-hub-sections');
+            if (!hub) {
+                return null;
+            }
+
+            const pane = hub.querySelector('[data-seerrfin-hub-pane="search"]');
+            if (!pane) {
+                return null;
+            }
+
+            return {
+                pane: pane,
+                input: pane.querySelector('.seerrfin-hub-search-input'),
+                itemsContainer: pane.querySelector('.seerrfin-hub-search-items'),
+                loadMoreWrap: pane.querySelector('[data-seerrfin-hub-search-loadmore]'),
+                loadMoreBtn: pane.querySelector('[data-seerrfin-hub-search-loadmore] button'),
+                status: pane.querySelector('[data-seerrfin-hub-search-status]'),
+                empty: pane.querySelector('[data-seerrfin-hub-search-empty]')
+            };
+        },
+
+        bindHubSearch: function () {
+            if (this._hubSearchBound) {
+                return;
+            }
+
+            this._hubSearchBound = true;
+            const self = this;
+
+            document.addEventListener('input', function (event) {
+                const input = event.target.closest && event.target.closest('.seerrfin-hub-search-input');
+                if (!input) {
+                    return;
+                }
+
+                clearTimeout(self._hubSearchDebounceTimer);
+                self._hubSearchDebounceTimer = setTimeout(function () {
+                    self.runHubSearch(input.value.trim());
+                }, 300);
+            });
+
+            document.addEventListener('click', function (event) {
+                const loadMoreBtn = event.target.closest && event.target.closest('[data-seerrfin-hub-search-loadmore] button');
+                if (!loadMoreBtn) {
+                    return;
+                }
+
+                event.preventDefault();
+                self.loadMoreHubSearch();
+            });
+        },
+
+        runHubSearch: function (query) {
+            const self = this;
+            const els = self.getHubSearchElements();
+            if (!els) {
+                return;
+            }
+
+            self._hubSearch.query = query;
+            self._hubSearch.loadedCount = 0;
+            self._hubSearch.total = 0;
+            const token = ++self._hubSearch.token;
+
+            els.itemsContainer.innerHTML = '';
+            els.loadMoreWrap.style.display = 'none';
+
+            if (!query) {
+                self._hubSearch.loading = false;
+                self.setHubSearchStatus(els, null);
+                self.setHubSearchEmpty(els, 'Search Seerr for movies and TV shows.');
+                return;
+            }
+
+            self.setHubSearchEmpty(els, null);
+            self.setHubSearchStatus(els, 'Searching...');
+            self._hubSearch.loading = true;
+
+            self.fetchSeerrSearch(query, 0, self._gridPageSize).then(function (result) {
+                if (token !== self._hubSearch.token) {
+                    return;
+                }
+                self._hubSearch.loading = false;
+                self.applyHubSearchPage(els, result, false);
+            }).catch(function (err) {
+                if (token !== self._hubSearch.token) {
+                    return;
+                }
+                self._hubSearch.loading = false;
+                log.warn('hub search failed for "' + query + '"', err);
+                self.setHubSearchStatus(els, 'Search failed. Check Seerr settings and that your Jellyfin user is linked in Seerr.');
+            });
+        },
+
+        loadMoreHubSearch: function () {
+            const self = this;
+            const els = self.getHubSearchElements();
+            if (!els || self._hubSearch.loading || !self._hubSearch.query) {
+                return;
+            }
+
+            const token = self._hubSearch.token;
+            self._hubSearch.loading = true;
+            els.loadMoreBtn.textContent = 'Loading...';
+            els.loadMoreBtn.disabled = true;
+
+            self.fetchSeerrSearch(self._hubSearch.query, self._hubSearch.loadedCount, self._gridPageSize).then(function (result) {
+                if (token !== self._hubSearch.token) {
+                    return;
+                }
+                self._hubSearch.loading = false;
+                self.applyHubSearchPage(els, result, true);
+            }).catch(function (err) {
+                if (token !== self._hubSearch.token) {
+                    return;
+                }
+                self._hubSearch.loading = false;
+                log.warn('hub search load more failed for "' + self._hubSearch.query + '"', err);
+                els.loadMoreBtn.textContent = 'Load more';
+                els.loadMoreBtn.disabled = false;
+            });
+        },
+
+        setHubSearchStatus: function (els, text) {
+            if (!els.status) {
+                return;
+            }
+            if (text) {
+                els.status.textContent = text;
+                els.status.style.display = '';
+            } else {
+                els.status.style.display = 'none';
+            }
+        },
+
+        setHubSearchEmpty: function (els, text) {
+            if (!els.empty) {
+                return;
+            }
+            if (text) {
+                els.empty.textContent = text;
+                els.empty.style.display = '';
+            } else {
+                els.empty.style.display = 'none';
+            }
+        },
+
+        applyHubSearchPage: function (els, result, append) {
+            const self = this;
+            self.setHubSearchStatus(els, null);
+            const items = (result && result.items) || [];
+
+            if (!items.length && !append) {
+                els.itemsContainer.innerHTML = '';
+                self.setHubSearchEmpty(els, 'No Seerr matches found.');
+                els.loadMoreWrap.style.display = 'none';
+                return;
+            }
+
+            self.setHubSearchEmpty(els, null);
+            const useNativeCards = self.shouldUseNativeSearchResults();
+            els.itemsContainer.insertAdjacentHTML('beforeend', self.createDiscoverCards(items, true, {
+                interactive: true,
+                includeMetaText: true,
+                nativeCards: useNativeCards
+            }));
+            self.initNativeOrCustomCards(els.itemsContainer, useNativeCards);
+
+            const newCount = self._hubSearch.loadedCount + items.length;
+            self._hubSearch.loadedCount = newCount;
+            const total = parseInt(result.total || self._hubSearch.total || '0', 10);
+            if (total > 0) {
+                self._hubSearch.total = total;
+            }
+
+            const hasMore = items.length === self._gridPageSize && (total === 0 || newCount < total);
+            els.loadMoreWrap.style.display = hasMore ? '' : 'none';
+            els.loadMoreBtn.textContent = 'Load more';
+            els.loadMoreBtn.disabled = false;
         },
 
         getSearchItemMediaRefs: function (item) {

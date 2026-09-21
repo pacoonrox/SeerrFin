@@ -446,7 +446,9 @@ public class SeerrFinController : ControllerBase
     public ActionResult<QueryResult<BaseItemDto>> Search(
         [FromServices] IUserManager userManager,
         [FromQuery] string? query,
-        [FromQuery] string? language = null)
+        [FromQuery] string? language = null,
+        [FromQuery] int startIndex = 0,
+        [FromQuery] int? limit = null)
     {
         if (string.IsNullOrWhiteSpace(query))
         {
@@ -458,7 +460,7 @@ public class SeerrFinController : ControllerBase
             });
         }
 
-        return _discoveryService.Search(GetUsername(userManager) ?? string.Empty, query, language);
+        return _discoveryService.Search(GetUsername(userManager) ?? string.Empty, query, language, startIndex, limit);
     }
 
     [HttpGet("genres/movie")]
