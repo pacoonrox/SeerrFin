@@ -1,14 +1,14 @@
 {
   "category": "General",
-  "changelog": "Stop discover rows from blocking on synchronous image downloads",
+  "changelog": "add Search section to the Requests tab",
   "description": "The best way to discover and request Movies and TV Shows through Seerr directly in Jellyfin.",
   "guid": "c8e4f2a1-9b3d-4e7f-a6c2-1d5e8f0a3b7c",
   "name": "SeerrFin",
   "overview": "This plugin gives Jellyfin one Requests entry with Shows, Movies, Downloads, and a monitored Sonarr/Radarr calendar, while preserving Seerr discovery and request workflows.",
   "owner": "pacoonrox",
   "targetAbi": "12.0.0.0",
-  "timestamp": "2026-09-18T06:28:02.0000000Z",
-  "version": "1.8.0.1",
+  "timestamp": "2026-09-21T10:06:42.0000000Z",
+  "version": "1.8.1.0",
   "status": "Active",
   "autoUpdate": true,
   "assemblies": [
