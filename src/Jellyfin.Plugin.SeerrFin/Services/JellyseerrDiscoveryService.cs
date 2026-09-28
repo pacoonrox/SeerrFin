@@ -192,6 +192,7 @@ public class JellyseerrDiscoveryService
         DiscoverItemFilterOptions mapping = ResolveMapping(config, useSeerrMapping);
 
         List<BaseItemDto> items = new();
+        HashSet<string> seenItemKeys = new(StringComparer.OrdinalIgnoreCase);
         int jellyseerrPage = 1;
         int targetLimit = Math.Max(1, limit ?? config.RowItemLimit);
         int skipped = 0;
@@ -266,6 +267,18 @@ public class JellyseerrDiscoveryService
                         !string.Equals(itemMediaType, mediaTypeFilter, StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
+                    }
+
+                    // Trending/discover pages can shift between page fetches (live re-ranking), which
+                    // can hand back the same title on two different pages - never show it twice in a row.
+                    int? itemTmdbId = item.Value<int?>("tmdbId") ?? item.Value<int?>("id");
+                    if (itemTmdbId.HasValue)
+                    {
+                        string itemKey = $"{itemMediaType}:{itemTmdbId.Value}";
+                        if (!seenItemKeys.Add(itemKey))
+                        {
+                            continue;
+                        }
                     }
 
                     BaseItemDto? dto = MapDiscoverItem(item, mapping);
