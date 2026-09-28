@@ -586,7 +586,9 @@ window.seerrFinLog = window.seerrFinLog || {
     }
 
     function getMovieReleaseDateEvents(data) {
-        const releaseDates = data.releaseDates || data.release_dates;
+        // Jellyfin's own SeerrFin backend proxies Jellyseerr's MovieDetails, which names this
+        // field "releases" (not "releaseDates"); the TMDB browser fetch path uses "release_dates".
+        const releaseDates = data.releases || data.releaseDates || data.release_dates;
         const results = releaseDates && releaseDates.results;
         if (!Array.isArray(results) || !results.length) {
             return null;
@@ -594,21 +596,19 @@ window.seerrFinLog = window.seerrFinLog || {
 
         const region = results.find(function (r) { return r.iso_3166_1 === getRegionCode(); })
             || results.find(function (r) { return r.iso_3166_1 === 'US'; });
-        let entries = (region && region.release_dates) || [];
-        if (!entries.length) {
-            entries = results.reduce(function (all, r) { return all.concat(r.release_dates || []); }, []);
-        }
+        const entries = (region && region.release_dates) || [];
 
-        function firstOfType(types) {
-            const match = entries
-                .filter(function (e) { return types.indexOf(e.type) !== -1; })
-                .sort(function (a, b) { return new Date(a.release_date) - new Date(b.release_date); })[0];
-            return match ? formatReleaseDate(match.release_date) : '';
-        }
+        // Mirrors Jellyseerr: types 3 (theatrical), 4 (digital), 5 (physical) only, first match wins.
+        const byType = {};
+        entries.forEach(function (entry) {
+            if (entry.type > 2 && entry.type < 6 && !(entry.type in byType)) {
+                byType[entry.type] = entry;
+            }
+        });
 
-        const theatrical = firstOfType([3, 2, 1]);
-        const digital = firstOfType([4]);
-        const physical = firstOfType([5]);
+        const theatrical = byType[3] ? formatReleaseDate(byType[3].release_date) : '';
+        const digital = byType[4] ? formatReleaseDate(byType[4].release_date) : '';
+        const physical = byType[5] ? formatReleaseDate(byType[5].release_date) : '';
         if (!theatrical && !digital && !physical) {
             return null;
         }
@@ -770,7 +770,9 @@ window.seerrFinLog = window.seerrFinLog || {
         const countries = getProductionCountriesList(data);
 
         if (mediaType === 'tv') {
-            const nextAirDateRaw = data.nextAirDate || (data.next_episode_to_air && data.next_episode_to_air.air_date);
+            const nextAirDateRaw = data.nextAirDate
+                || (data.nextEpisodeToAir && data.nextEpisodeToAir.airDate)
+                || (data.next_episode_to_air && data.next_episode_to_air.air_date);
             const nextAirLabel = nextAirDateRaw && nextAirDateRaw !== (data.firstAirDate || data.first_air_date)
                 ? formatReleaseDate(nextAirDateRaw)
                 : '';
@@ -942,26 +944,32 @@ window.seerrFinLog = window.seerrFinLog || {
         return '';
     }
 
-    function renderInteractiveError(body, err) {
-        const message = (err && err.error && err.error.message)
-            || (typeof err === 'string' ? err : null)
-            || 'Something went wrong.';
-        body.innerHTML = `<div class="bst-quality-empty">${escapeHtml(message)}</div>`;
+    function renderInteractiveError(body, message) {
+        body.innerHTML = `<div class="bst-quality-empty">${escapeHtml(message || 'Something went wrong.')}</div>`;
     }
 
-    function parseAjaxErrorMessage(err) {
-        try {
-            const raw = err && (err.responseText || (err.response && err.response.text));
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                if (parsed && parsed.message) {
-                    return parsed.message;
-                }
-            }
-        } catch (parseErr) {
-            // fall through to generic message
+    function parseAjaxErrorMessage(err, fallback) {
+        if (err && err.responseJSON && (err.responseJSON.message || err.responseJSON.error)) {
+            return Promise.resolve(String(err.responseJSON.message || err.responseJSON.error));
         }
-        return null;
+        if (err && typeof err.text === 'function') {
+            // Jellyfin ApiClient (fetch) rejects with a Response object.
+            const reader = typeof err.clone === 'function' ? err.clone() : err;
+            return reader.text().then(function (text) {
+                try {
+                    const body = JSON.parse(text);
+                    return String(body.message || body.error || text || fallback);
+                } catch (parseErr) {
+                    return text || fallback;
+                }
+            }).catch(function () {
+                return fallback;
+            });
+        }
+        if (err && typeof err.message === 'string' && err.message) {
+            return Promise.resolve(err.message);
+        }
+        return Promise.resolve(fallback);
     }
 
     function renderReleaseList(body, releases, grabKind) {
@@ -1012,7 +1020,9 @@ window.seerrFinLog = window.seerrFinLog || {
                     btn.disabled = false;
                     btn.textContent = 'Download';
                     log.error('grab release failed', err);
-                    renderInteractiveError(body, parseAjaxErrorMessage(err) || 'Failed to grab that release — search again.');
+                    parseAjaxErrorMessage(err, 'Failed to grab that release — search again.').then(function (message) {
+                renderInteractiveError(body, message);
+            });
                 });
             });
         });
@@ -1034,7 +1044,9 @@ window.seerrFinLog = window.seerrFinLog || {
         fetchInteractiveJson('interactive-search/movie/' + interactiveContext.tmdbId + '/releases').then(function (releases) {
             renderReleaseList(body, releases, 'movie');
         }).catch(function (err) {
-            renderInteractiveError(body, parseAjaxErrorMessage(err) || 'Failed to search Radarr.');
+            parseAjaxErrorMessage(err, 'Failed to search Radarr.').then(function (message) {
+                renderInteractiveError(body, message);
+            });
         });
     }
 
@@ -1072,7 +1084,9 @@ window.seerrFinLog = window.seerrFinLog || {
                 });
             });
         }).catch(function (err) {
-            renderInteractiveError(body, parseAjaxErrorMessage(err) || 'Failed to load seasons from Sonarr.');
+            parseAjaxErrorMessage(err, 'Failed to load seasons from Sonarr.').then(function (message) {
+                renderInteractiveError(body, message);
+            });
         });
     }
 
@@ -1111,7 +1125,9 @@ window.seerrFinLog = window.seerrFinLog || {
                 });
             });
         }).catch(function (err) {
-            renderInteractiveError(body, parseAjaxErrorMessage(err) || 'Failed to load episodes from Sonarr.');
+            parseAjaxErrorMessage(err, 'Failed to load episodes from Sonarr.').then(function (message) {
+                renderInteractiveError(body, message);
+            });
         });
     }
 
@@ -1120,7 +1136,9 @@ window.seerrFinLog = window.seerrFinLog || {
         fetchInteractiveJson('interactive-search/series/' + interactiveContext.tmdbId + '/season/' + seasonNumber + '/releases').then(function (releases) {
             renderReleaseList(body, releases, 'series');
         }).catch(function (err) {
-            renderInteractiveError(body, parseAjaxErrorMessage(err) || 'Failed to search Sonarr.');
+            parseAjaxErrorMessage(err, 'Failed to search Sonarr.').then(function (message) {
+                renderInteractiveError(body, message);
+            });
         });
     }
 
@@ -1129,7 +1147,9 @@ window.seerrFinLog = window.seerrFinLog || {
         fetchInteractiveJson('interactive-search/episode/' + episodeId + '/releases').then(function (releases) {
             renderReleaseList(body, releases, 'series');
         }).catch(function (err) {
-            renderInteractiveError(body, parseAjaxErrorMessage(err) || 'Failed to search Sonarr.');
+            parseAjaxErrorMessage(err, 'Failed to search Sonarr.').then(function (message) {
+                renderInteractiveError(body, message);
+            });
         });
     }
 
