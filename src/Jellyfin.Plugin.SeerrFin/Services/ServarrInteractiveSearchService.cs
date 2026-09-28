@@ -31,10 +31,10 @@ public sealed class ServarrInteractiveSearchService
         try
         {
             using HttpClient client = CreateClient(config.RadarrUrl!, config.RadarrApiKey!);
-            JObject? movie = await FindRadarrMovieAsync(client, tmdbId, cancellationToken).ConfigureAwait(false);
+            (JObject? movie, string? error) = await EnsureRadarrMovieAsync(client, tmdbId, cancellationToken).ConfigureAwait(false);
             if (movie == null)
             {
-                return (404, ErrorJson("This movie hasn't been added to Radarr yet. Request it first."));
+                return (404, ErrorJson(error ?? "Movie not found in Radarr."));
             }
 
             int movieId = movie.Value<int>("id");
@@ -59,10 +59,10 @@ public sealed class ServarrInteractiveSearchService
         try
         {
             using HttpClient client = CreateClient(config.SonarrUrl!, config.SonarrApiKey!);
-            JObject? series = await FindSonarrSeriesAsync(client, tmdbId, cancellationToken).ConfigureAwait(false);
+            (JObject? series, string? error) = await EnsureSonarrSeriesAsync(client, tmdbId, cancellationToken).ConfigureAwait(false);
             if (series == null)
             {
-                return (404, ErrorJson("This series hasn't been added to Sonarr yet. Request it first."));
+                return (404, ErrorJson(error ?? "Series not found in Sonarr."));
             }
 
             JArray seasons = new();
@@ -111,10 +111,10 @@ public sealed class ServarrInteractiveSearchService
         try
         {
             using HttpClient client = CreateClient(config.SonarrUrl!, config.SonarrApiKey!);
-            JObject? series = await FindSonarrSeriesAsync(client, tmdbId, cancellationToken).ConfigureAwait(false);
+            (JObject? series, string? error) = await EnsureSonarrSeriesAsync(client, tmdbId, cancellationToken).ConfigureAwait(false);
             if (series == null)
             {
-                return (404, ErrorJson("This series hasn't been added to Sonarr yet. Request it first."));
+                return (404, ErrorJson(error ?? "Series not found in Sonarr."));
             }
 
             int seriesId = series.Value<int>("id");
@@ -139,10 +139,10 @@ public sealed class ServarrInteractiveSearchService
         try
         {
             using HttpClient client = CreateClient(config.SonarrUrl!, config.SonarrApiKey!);
-            JObject? series = await FindSonarrSeriesAsync(client, tmdbId, cancellationToken).ConfigureAwait(false);
+            (JObject? series, string? error) = await EnsureSonarrSeriesAsync(client, tmdbId, cancellationToken).ConfigureAwait(false);
             if (series == null)
             {
-                return (404, ErrorJson("This series hasn't been added to Sonarr yet. Request it first."));
+                return (404, ErrorJson(error ?? "Series not found in Sonarr."));
             }
 
             int seriesId = series.Value<int>("id");
@@ -229,6 +229,121 @@ public sealed class ServarrInteractiveSearchService
         // full list and match locally (the same approach ServarrProgressService already uses).
         JArray? seriesList = await GetJsonArrayAsync(client, "series", cancellationToken).ConfigureAwait(false);
         return seriesList?.OfType<JObject>().FirstOrDefault(s => s.Value<int?>("tmdbId") == tmdbId);
+    }
+
+    /// <summary>
+    /// Interactive search needs the title to already exist in Radarr before releases can be
+    /// searched. Rather than making the admin go request it first, silently add it (unmonitored
+    /// search-wise - we're about to search manually) using the same lookup Radarr's own "Add
+    /// Movie" screen uses, and the first configured quality profile/root folder as defaults.
+    /// </summary>
+    private async Task<(JObject? Movie, string? Error)> EnsureRadarrMovieAsync(HttpClient client, int tmdbId, CancellationToken cancellationToken)
+    {
+        JObject? existing = await FindRadarrMovieAsync(client, tmdbId, cancellationToken).ConfigureAwait(false);
+        if (existing != null)
+        {
+            return (existing, null);
+        }
+
+        JObject? lookup = await GetJsonObjectAsync(client, $"movie/lookup/tmdb?tmdbId={tmdbId}", cancellationToken).ConfigureAwait(false);
+        if (lookup == null)
+        {
+            return (null, "Couldn't find this movie in Radarr's metadata source.");
+        }
+
+        int? profileId = await GetFirstQualityProfileIdAsync(client, cancellationToken).ConfigureAwait(false);
+        string? rootFolder = await GetFirstRootFolderAsync(client, cancellationToken).ConfigureAwait(false);
+        if (profileId == null || string.IsNullOrWhiteSpace(rootFolder))
+        {
+            return (null, "Radarr has no quality profile or root folder configured - add one in Radarr first.");
+        }
+
+        lookup["qualityProfileId"] = profileId.Value;
+        lookup["rootFolderPath"] = rootFolder;
+        lookup["monitored"] = true;
+        lookup["addOptions"] = new JObject { ["searchForMovie"] = false };
+
+        using StringContent content = new(lookup.ToString(Formatting.None), Encoding.UTF8, "application/json");
+        using HttpResponseMessage response = await client.PostAsync("movie", content, cancellationToken).ConfigureAwait(false);
+        string responseBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("SeerrFin • failed to add movie {TmdbId} to Radarr: {Status} {Body}", tmdbId, response.StatusCode, responseBody);
+            return (null, "Failed to add this movie to Radarr.");
+        }
+
+        return (JObject.Parse(responseBody), null);
+    }
+
+    /// <summary>
+    /// Same idea as <see cref="EnsureRadarrMovieAsync"/>, but for Sonarr series. Sonarr identifies
+    /// new shows by TVDB id normally, but its search proxy also accepts a "tmdb:{id}" lookup term.
+    /// </summary>
+    private async Task<(JObject? Series, string? Error)> EnsureSonarrSeriesAsync(HttpClient client, int tmdbId, CancellationToken cancellationToken)
+    {
+        JObject? existing = await FindSonarrSeriesAsync(client, tmdbId, cancellationToken).ConfigureAwait(false);
+        if (existing != null)
+        {
+            return (existing, null);
+        }
+
+        JArray? lookupResults = await GetJsonArrayAsync(client, $"series/lookup?term=tmdb:{tmdbId}", cancellationToken).ConfigureAwait(false);
+        JObject? lookup = lookupResults?.OfType<JObject>().FirstOrDefault();
+        if (lookup == null)
+        {
+            return (null, "Couldn't find this series in Sonarr's metadata source.");
+        }
+
+        int? profileId = await GetFirstQualityProfileIdAsync(client, cancellationToken).ConfigureAwait(false);
+        string? rootFolder = await GetFirstRootFolderAsync(client, cancellationToken).ConfigureAwait(false);
+        if (profileId == null || string.IsNullOrWhiteSpace(rootFolder))
+        {
+            return (null, "Sonarr has no quality profile or root folder configured - add one in Sonarr first.");
+        }
+
+        lookup["qualityProfileId"] = profileId.Value;
+        lookup["rootFolderPath"] = rootFolder;
+        lookup["monitored"] = true;
+        lookup["addOptions"] = new JObject
+        {
+            ["searchForMissingEpisodes"] = false,
+            ["searchForCutoffUnmetEpisodes"] = false
+        };
+
+        using StringContent content = new(lookup.ToString(Formatting.None), Encoding.UTF8, "application/json");
+        using HttpResponseMessage response = await client.PostAsync("series", content, cancellationToken).ConfigureAwait(false);
+        string responseBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("SeerrFin • failed to add series {TmdbId} to Sonarr: {Status} {Body}", tmdbId, response.StatusCode, responseBody);
+            return (null, "Failed to add this series to Sonarr.");
+        }
+
+        return (JObject.Parse(responseBody), null);
+    }
+
+    private static async Task<int?> GetFirstQualityProfileIdAsync(HttpClient client, CancellationToken cancellationToken)
+    {
+        JArray? profiles = await GetJsonArrayAsync(client, "qualityprofile", cancellationToken).ConfigureAwait(false);
+        return profiles?.OfType<JObject>().FirstOrDefault()?.Value<int?>("id");
+    }
+
+    private static async Task<string?> GetFirstRootFolderAsync(HttpClient client, CancellationToken cancellationToken)
+    {
+        JArray? folders = await GetJsonArrayAsync(client, "rootfolder", cancellationToken).ConfigureAwait(false);
+        return folders?.OfType<JObject>().FirstOrDefault()?.Value<string>("path");
+    }
+
+    private static async Task<JObject?> GetJsonObjectAsync(HttpClient client, string path, CancellationToken cancellationToken)
+    {
+        using HttpResponseMessage response = await client.GetAsync(path.TrimStart('/'), cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        string raw = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return JObject.Parse(raw);
     }
 
     private static bool IsRadarrConfigured(PluginConfiguration config) =>
