@@ -234,28 +234,104 @@ public class SeerrFinController : ControllerBase
 
     [HttpPost("interactive-search/movie/grab")]
     [Authorize]
-    public async Task<IActionResult> GrabMovieInteractiveRelease(CancellationToken cancellationToken)
+    public async Task<IActionResult> GrabMovieInteractiveRelease(
+        [FromServices] IUserManager userManager,
+        CancellationToken cancellationToken)
     {
-        (_, _, string releaseJson) = await ReadInteractiveGrabRequestAsync(cancellationToken).ConfigureAwait(false);
+        (int? tmdbId, _, string releaseJson) = await ReadInteractiveGrabRequestAsync(cancellationToken).ConfigureAwait(false);
 
         (int statusCode, string responseBody) = await _interactiveSearchService
             .GrabMovieReleaseAsync(releaseJson, cancellationToken)
             .ConfigureAwait(false);
+
+        if (statusCode is >= 200 and < 300)
+        {
+            await SyncGrabToSeerrRequestAsync(userManager, "movie", tmdbId, null, cancellationToken).ConfigureAwait(false);
+        }
 
         return new ContentResult { StatusCode = statusCode, Content = responseBody, ContentType = "application/json" };
     }
 
     [HttpPost("interactive-search/series/grab")]
     [Authorize]
-    public async Task<IActionResult> GrabSeriesInteractiveRelease(CancellationToken cancellationToken)
+    public async Task<IActionResult> GrabSeriesInteractiveRelease(
+        [FromServices] IUserManager userManager,
+        CancellationToken cancellationToken)
     {
-        (_, _, string releaseJson) = await ReadInteractiveGrabRequestAsync(cancellationToken).ConfigureAwait(false);
+        (int? tmdbId, int? seasonNumber, string releaseJson) = await ReadInteractiveGrabRequestAsync(cancellationToken).ConfigureAwait(false);
 
         (int statusCode, string responseBody) = await _interactiveSearchService
             .GrabSeriesReleaseAsync(releaseJson, cancellationToken)
             .ConfigureAwait(false);
 
+        if (statusCode is >= 200 and < 300)
+        {
+            await SyncGrabToSeerrRequestAsync(userManager, "tv", tmdbId, seasonNumber, cancellationToken).ConfigureAwait(false);
+        }
+
         return new ContentResult { StatusCode = statusCode, Content = responseBody, ContentType = "application/json" };
+    }
+
+    /// <summary>
+    /// Interactive search grabs go straight to Radarr/Sonarr, bypassing Seerr entirely, so
+    /// without this the download would never show up in the Downloads tab (which only lists
+    /// Seerr requests). Create/sync a matching Seerr request for whoever actually grabbed it so
+    /// it flows through the normal requests + progress pipeline. Sets skipSearch so a Seerr fork
+    /// that understands the flag (see this plugin's paired Seerr fork) won't run its own
+    /// automatic search and grab a second, competing release for the same title while the first
+    /// is still downloading - against a stock Seerr/Jellyseerr that ignores unknown fields, that
+    /// duplicate-search risk still applies. Best-effort only - the grab itself already
+    /// succeeded, so a failure here (no permission, already requested, Seerr unreachable) is
+    /// logged and swallowed rather than surfaced to the user.
+    /// </summary>
+    private async Task SyncGrabToSeerrRequestAsync(
+        IUserManager userManager,
+        string mediaType,
+        int? tmdbId,
+        int? seasonNumber,
+        CancellationToken cancellationToken)
+    {
+        if (tmdbId is not > 0)
+        {
+            return;
+        }
+
+        string? username = GetUsername(userManager);
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            return;
+        }
+
+        DiscoverRequestPayload payload = new()
+        {
+            MediaType = mediaType,
+            MediaId = tmdbId.Value,
+            Seasons = seasonNumber.HasValue ? new List<int> { seasonNumber.Value } : null,
+            SkipSearch = true
+        };
+
+        try
+        {
+            (int statusCode, string body, _) = await _requestService
+                .SubmitRequestAsync(username, payload, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (statusCode is < 200 or >= 300)
+            {
+                // Expected in common cases too (e.g. a request for this title/season already
+                // exists), so this stays at debug rather than warning.
+                _logger.LogDebug(
+                    "SeerrFin • interactive search grab for {MediaType}/{TmdbId} did not sync a Seerr request ({StatusCode}): {Body}",
+                    mediaType,
+                    tmdbId,
+                    statusCode,
+                    body);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SeerrFin • failed to sync interactive search grab for {MediaType}/{TmdbId} with a Seerr request", mediaType, tmdbId);
+        }
     }
 
     private async Task<(int? TmdbId, int? SeasonNumber, string ReleaseJson)> ReadInteractiveGrabRequestAsync(CancellationToken cancellationToken)

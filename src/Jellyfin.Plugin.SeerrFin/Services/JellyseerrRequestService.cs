@@ -128,6 +128,11 @@ public class JellyseerrRequestService
             body["is4k"] = true;
         }
 
+        if (payload.SkipSearch)
+        {
+            body["skipSearch"] = true;
+        }
+
         HttpResponseMessage response = await client
             .PostAsync("/api/v1/request", new StringContent(body.ToString(), Encoding.UTF8, "application/json"), cancellationToken)
             .ConfigureAwait(false);
