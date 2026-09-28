@@ -1112,6 +1112,7 @@ window.seerrFinLog = window.seerrFinLog || {
 
         const sortState = { key: 'peers', dir: 'desc' };
         const grabbedIndices = {};
+        const grabbedTitles = [];
         const filterOptions = collectReleaseFilterOptions(releases);
         const filterState = { quality: new Set(), language: new Set(), indexer: new Set() };
         let filterPanelOpen = false;
@@ -1275,16 +1276,29 @@ window.seerrFinLog = window.seerrFinLog || {
             body.querySelectorAll('.bst-interactive-grab-btn').forEach(function (btn) {
                 btn.addEventListener('click', function () {
                     const release = releases[parseInt(btn.getAttribute('data-index'), 10)];
+                    const warnings = [];
 
                     // Rejected releases (e.g. "Existing file meets cutoff") are still valid to
-                    // grab - it just means automatic search would have skipped it. Confirm since
-                    // this can overwrite/replace a file already sitting in the library.
+                    // grab - it just means automatic search would have skipped it.
                     if (release.rejected) {
-                        const reasons = (release.rejections || []).join('\n• ');
-                        const confirmed = window.confirm(
-                            'This release was rejected by Sonarr/Radarr:\n\n• ' + reasons +
-                            '\n\nDownload it anyway? This may overwrite the existing file.'
+                        warnings.push(
+                            'This release was rejected by Sonarr/Radarr:\n• ' + (release.rejections || []).join('\n• ') +
+                            '\nDownloading it anyway may overwrite the existing file.'
                         );
+                    }
+
+                    // Grabbing a second release for the same movie/episode is almost always a
+                    // mis-click, not intentional - make sure that's really what's wanted before
+                    // it downloads a duplicate.
+                    if (grabbedTitles.length) {
+                        warnings.push(
+                            'You already grabbed:\n• ' + grabbedTitles.join('\n• ') +
+                            '\nGrabbing another release here will download a duplicate.'
+                        );
+                    }
+
+                    if (warnings.length) {
+                        const confirmed = window.confirm(warnings.join('\n\n') + '\n\nDownload this release anyway?');
                         if (!confirmed) {
                             return;
                         }
@@ -1294,6 +1308,7 @@ window.seerrFinLog = window.seerrFinLog || {
                     btn.textContent = 'Grabbing…';
                     grabInteractiveRelease(release, grabKind).then(function () {
                         grabbedIndices[release.__index] = true;
+                        grabbedTitles.push(release.title || 'Unknown release');
                         btn.textContent = 'Sent to download client';
                     }).catch(function (err) {
                         btn.disabled = false;
