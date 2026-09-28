@@ -34,7 +34,6 @@ window.seerrFinLog = window.seerrFinLog || {
     let interactiveViewStack = [];
     let interactiveContext = null;
     let escapeHandler = null;
-    let cachedIsAdmin = null;
 
     function escapeHtml(text) {
         const div = document.createElement('div');
@@ -898,18 +897,6 @@ window.seerrFinLog = window.seerrFinLog || {
         }
         removeEscapeHandler();
         document.body.style.overflow = '';
-    }
-
-    function isCurrentUserAdmin() {
-        if (cachedIsAdmin !== null) {
-            return Promise.resolve(cachedIsAdmin);
-        }
-        return ApiClient.getCurrentUser().then(function (user) {
-            cachedIsAdmin = !!(user && user.Policy && user.Policy.IsAdministrator);
-            return cachedIsAdmin;
-        }).catch(function () {
-            return false;
-        });
     }
 
     function fetchInteractiveJson(path) {
@@ -2259,9 +2246,7 @@ window.seerrFinLog = window.seerrFinLog || {
             interactiveSearchBtn.addEventListener('click', function () {
                 openInteractiveSearchModal(tmdbId, mediaType, title);
             });
-            isCurrentUserAdmin().then(function (isAdmin) {
-                interactiveSearchBtn.hidden = !isAdmin;
-            });
+            interactiveSearchBtn.hidden = false;
         }
 
         const settings = window.seerrFinPlugin && window.seerrFinPlugin._displaySettings;

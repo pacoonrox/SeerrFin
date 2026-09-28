@@ -183,7 +183,7 @@ public class SeerrFinController : ControllerBase
     }
 
     [HttpGet("interactive-search/movie/{tmdbId:int}/releases")]
-    [Authorize(Roles = "Administrator")]
+    [Authorize]
     public async Task<IActionResult> GetMovieInteractiveReleases(int tmdbId, CancellationToken cancellationToken)
     {
         (int statusCode, string body) = await _interactiveSearchService
@@ -193,7 +193,7 @@ public class SeerrFinController : ControllerBase
     }
 
     [HttpGet("interactive-search/series/{tmdbId:int}")]
-    [Authorize(Roles = "Administrator")]
+    [Authorize]
     public async Task<IActionResult> GetSeriesInteractiveInfo(int tmdbId, CancellationToken cancellationToken)
     {
         (int statusCode, string body) = await _interactiveSearchService
@@ -203,7 +203,7 @@ public class SeerrFinController : ControllerBase
     }
 
     [HttpGet("interactive-search/series/{tmdbId:int}/season/{seasonNumber:int}/episodes")]
-    [Authorize(Roles = "Administrator")]
+    [Authorize]
     public async Task<IActionResult> GetSeasonInteractiveEpisodes(int tmdbId, int seasonNumber, CancellationToken cancellationToken)
     {
         (int statusCode, string body) = await _interactiveSearchService
@@ -213,7 +213,7 @@ public class SeerrFinController : ControllerBase
     }
 
     [HttpGet("interactive-search/series/{tmdbId:int}/season/{seasonNumber:int}/releases")]
-    [Authorize(Roles = "Administrator")]
+    [Authorize]
     public async Task<IActionResult> GetSeasonInteractiveReleases(int tmdbId, int seasonNumber, CancellationToken cancellationToken)
     {
         (int statusCode, string body) = await _interactiveSearchService
@@ -223,7 +223,7 @@ public class SeerrFinController : ControllerBase
     }
 
     [HttpGet("interactive-search/episode/{episodeId:int}/releases")]
-    [Authorize(Roles = "Administrator")]
+    [Authorize]
     public async Task<IActionResult> GetEpisodeInteractiveReleases(int episodeId, CancellationToken cancellationToken)
     {
         (int statusCode, string body) = await _interactiveSearchService
@@ -233,7 +233,7 @@ public class SeerrFinController : ControllerBase
     }
 
     [HttpPost("interactive-search/movie/grab")]
-    [Authorize(Roles = "Administrator")]
+    [Authorize]
     public async Task<IActionResult> GrabMovieInteractiveRelease(CancellationToken cancellationToken)
     {
         (_, _, string releaseJson) = await ReadInteractiveGrabRequestAsync(cancellationToken).ConfigureAwait(false);
@@ -246,7 +246,7 @@ public class SeerrFinController : ControllerBase
     }
 
     [HttpPost("interactive-search/series/grab")]
-    [Authorize(Roles = "Administrator")]
+    [Authorize]
     public async Task<IActionResult> GrabSeriesInteractiveRelease(CancellationToken cancellationToken)
     {
         (_, _, string releaseJson) = await ReadInteractiveGrabRequestAsync(cancellationToken).ConfigureAwait(false);
