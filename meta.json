@@ -1,14 +1,14 @@
 {
   "category": "General",
-  "changelog": "correct Jellyseerr field names for release dates and surface real interactive-search errors",
+  "changelog": "de-duplicate discover row items across paginated fetches",
   "description": "The best way to discover and request Movies and TV Shows through Seerr directly in Jellyfin.",
   "guid": "c8e4f2a1-9b3d-4e7f-a6c2-1d5e8f0a3b7c",
   "name": "SeerrFin",
   "overview": "This plugin gives Jellyfin one Requests entry with Shows, Movies, Downloads, and a monitored Sonarr/Radarr calendar, while preserving Seerr discovery and request workflows.",
   "owner": "pacoonrox",
   "targetAbi": "12.0.0.0",
-  "timestamp": "2026-09-28T07:37:17.0000000Z",
-  "version": "1.8.3.1",
+  "timestamp": "2026-09-28T07:41:16.0000000Z",
+  "version": "1.8.3.2",
   "status": "Active",
   "autoUpdate": true,
   "assemblies": [
