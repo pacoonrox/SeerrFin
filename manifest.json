@@ -10,6 +10,15 @@
     "repositoryUrl": "https://github.com/pacoonrox/SeerrFin",
     "versions": [
       {
+        "version": "1.8.3.1",
+        "changelog": "correct Jellyseerr field names for release dates and surface real interactive-search errors",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/pacoonrox/SeerrFin/releases/download/1.8.3.1/Jellyfin.Plugin.SeerrFin_12.0.0.zip",
+        "checksum": "697D8FF6A7C61A0EDEDD4EFBA1719F7C",
+        "timestamp": "2026-09-28T07:37:17.0000000Z",
+        "dependencies": []
+      },
+      {
         "version": "1.8.3.0",
         "changelog": "add admin interactive search and mirror Seerr's media info panel",
         "targetAbi": "12.0.0.0",
