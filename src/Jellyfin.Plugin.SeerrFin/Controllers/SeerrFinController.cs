@@ -76,14 +76,20 @@ public class SeerrFinController : ControllerBase
     private void SetCacheHeaders()
     {
         var config = SeerrFinPlugin.Instance.Configuration;
-        // Developer mode bypasses browser cache. Production uses configurable ttl
+        // Developer mode bypasses browser cache entirely.
+        // Production: "private, no-cache" so a per-user browser cache is still allowed (fast
+        // 304s), but every load revalidates against the ETag below instead of trusting a blind
+        // TTL - and "private" keeps a CDN/reverse proxy in front of Jellyfin (e.g. Cloudflare
+        // Tunnel) from caching and serving a stale copy of these injected files to every visitor
+        // until it happens to expire. Without this, new tabs/features only appear after a hard
+        // refresh instead of a normal page load.
         if (config.DeveloperMode)
         {
             Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
         }
         else
         {
-            Response.Headers.CacheControl = $"public, max-age={config.CacheTimeoutSeconds}";
+            Response.Headers.CacheControl = "private, no-cache, must-revalidate";
         }
 
         // ETag is the assembly version with admin cache-bust counter so config saves invalidate old assets
