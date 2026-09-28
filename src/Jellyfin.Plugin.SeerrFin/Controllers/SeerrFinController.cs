@@ -246,7 +246,16 @@ public class SeerrFinController : ControllerBase
 
         if (statusCode is >= 200 and < 300 && tmdbId.HasValue)
         {
-            await SyncInteractiveGrabWithSeerrAsync(userManager, "movie", tmdbId.Value, null, cancellationToken).ConfigureAwait(false);
+            // Fire-and-forget: the admin's UI locks every other release button as soon as this
+            // response comes back, so awaiting a whole extra round trip to Seerr here (resolving
+            // its user, then POSTing a request) left that window open long enough for a second
+            // grab to slip through before the lock applied. The actual download already
+            // succeeded either way, so this response shouldn't wait on best-effort bookkeeping.
+            string? username = GetUsername(userManager);
+            if (!string.IsNullOrWhiteSpace(username))
+            {
+                _ = SyncInteractiveGrabWithSeerrAsync(username, "movie", tmdbId.Value, null);
+            }
         }
 
         return new ContentResult { StatusCode = statusCode, Content = responseBody, ContentType = "application/json" };
@@ -266,7 +275,11 @@ public class SeerrFinController : ControllerBase
 
         if (statusCode is >= 200 and < 300 && tmdbId.HasValue)
         {
-            await SyncInteractiveGrabWithSeerrAsync(userManager, "tv", tmdbId.Value, seasonNumber, cancellationToken).ConfigureAwait(false);
+            string? username = GetUsername(userManager);
+            if (!string.IsNullOrWhiteSpace(username))
+            {
+                _ = SyncInteractiveGrabWithSeerrAsync(username, "tv", tmdbId.Value, seasonNumber);
+            }
         }
 
         return new ContentResult { StatusCode = statusCode, Content = responseBody, ContentType = "application/json" };
@@ -297,23 +310,18 @@ public class SeerrFinController : ControllerBase
     /// Grabbing a release directly through Radarr/Sonarr (as interactive search does) bypasses
     /// Seerr entirely, so it would never show up in Seerr's own Downloads tab. Best-effort submit
     /// a matching Seerr request afterward so it gets tracked the same as a normal request would.
-    /// A failure here must never fail the grab response - the download already started.
+    /// Deliberately not awaited by the caller (see the fire-and-forget comment at each call site)
+    /// and takes a plain username rather than IUserManager, so it never touches anything tied to
+    /// the HTTP request's lifetime - this keeps running after the response has already been sent.
     /// </summary>
     private async Task SyncInteractiveGrabWithSeerrAsync(
-        IUserManager userManager,
+        string username,
         string mediaType,
         int tmdbId,
-        int? seasonNumber,
-        CancellationToken cancellationToken)
+        int? seasonNumber)
     {
         try
         {
-            string? username = GetUsername(userManager);
-            if (string.IsNullOrWhiteSpace(username))
-            {
-                return;
-            }
-
             DiscoverRequestPayload payload = new()
             {
                 MediaType = mediaType,
@@ -321,7 +329,7 @@ public class SeerrFinController : ControllerBase
                 Seasons = seasonNumber.HasValue ? new List<int> { seasonNumber.Value } : null
             };
 
-            await _requestService.SubmitRequestAsync(username, payload, cancellationToken).ConfigureAwait(false);
+            await _requestService.SubmitRequestAsync(username, payload, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
