@@ -25,11 +25,16 @@ window.seerrFinLog = window.seerrFinLog || {
     const TMDB_LOGO_SVG = '<svg width="2em" height="2em" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190.24 81.52"><defs><linearGradient id="bst-tmdb-grad" y1="40.76" x2="190.24" y2="40.76" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#90cea1"/><stop offset="0.56" stop-color="#3cbec9"/><stop offset="1" stop-color="#00b3e5"/></linearGradient></defs><path fill="url(#bst-tmdb-grad)" d="M105.67,36.06h66.9A17.67,17.67,0,0,0,190.24,18.4h0A17.67,17.67,0,0,0,172.57.73h-66.9A17.67,17.67,0,0,0,88,18.4h0A17.67,17.67,0,0,0,105.67,36.06Zm-88,45h76.9A17.67,17.67,0,0,0,112.24,63.4h0A17.67,17.67,0,0,0,94.57,45.73H17.67A17.67,17.67,0,0,0,0,63.4H0A17.67,17.67,0,0,0,17.67,81.06ZM10.41,35.42h7.8V6.92h10.1V0H.31v6.9h10.1Zm28.1,0h7.8V8.25h.1l9,27.15h6l9.3-27.15h.1V35.4h7.8V0H66.76l-8.2,23.1h-.1L50.31,0H38.51ZM152.43,55.67a15.07,15.07,0,0,0-4.52-5.52,18.57,18.57,0,0,0-6.68-3.08,33.54,33.54,0,0,0-8.07-1h-11.7v35.4h12.75a24.58,24.58,0,0,0,7.55-1.15A19.34,19.34,0,0,0,148.11,77a16.27,16.27,0,0,0,4.37-5.5,16.91,16.91,0,0,0,1.63-7.58A18.5,18.5,0,0,0,152.43,55.67ZM145,68.6A8.8,8.8,0,0,1,142.36,72a10.7,10.7,0,0,1-4,1.82,21.57,21.57,0,0,1-5,.55h-4.05v-21h4.6a17,17,0,0,1,4.67.63,11.66,11.66,0,0,1,3.88,1.87A9.14,9.14,0,0,1,145,59a9.87,9.87,0,0,1,1,4.52A11.89,11.89,0,0,1,145,68.6Zm44.63-.13a8,8,0,0,0-1.58-2.62A8.38,8.38,0,0,0,185.63,64a10.31,10.31,0,0,0-3.17-1v-.1a9.22,9.22,0,0,0,4.42-2.82,7.43,7.43,0,0,0,1.68-5,8.42,8.42,0,0,0-1.15-4.65,8.09,8.09,0,0,0-3-2.72,12.56,12.56,0,0,0-4.18-1.3,32.84,32.84,0,0,0-4.62-.33h-13.2v35.4h14.5a22.41,22.41,0,0,0,4.72-.5,13.53,13.53,0,0,0,4.28-1.65,9.42,9.42,0,0,0,3.1-3,8.52,8.52,0,0,0,1.2-4.68A9.39,9.39,0,0,0,189.66,68.47ZM170.21,52.72h5.3a10,10,0,0,1,1.85.18,6.18,6.18,0,0,1,1.7.57,3.39,3.39,0,0,1,1.22,1.13,3.22,3.22,0,0,1,.48,1.82,3.63,3.63,0,0,1-.43,1.8,3.4,3.4,0,0,1-1.12,1.2,4.92,4.92,0,0,1-1.58.65,7.51,7.51,0,0,1-1.77.2h-5.65Zm11.72,20a3.9,3.9,0,0,1-1.22,1.3,4.64,4.64,0,0,1-1.68.7,8.18,8.18,0,0,1-1.82.2h-7v-8h5.9a15.35,15.35,0,0,1,2,.15,8.47,8.47,0,0,1,2.05.55,4,4,0,0,1,1.57,1.18,3.11,3.11,0,0,1,.63,2A3.71,3.71,0,0,1,181.93,72.72Z"/></svg>';
     const CLOSE_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 320 512"><path fill="currentColor" d="M310.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L160 210.7 54.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L114.7 256 9.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L160 301.3 265.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L205.3 256 310.6 150.6z"/></svg>';
     const IMDB_ICON = '<svg width="2em" height="2em" fill="currentColor" viewBox="0 0 32 32"><path d="M8.4,21.1H5.9V9.9h3.8l0.7,4.7h0.1L11,9.9h3.8v11.2h-2.5v-6.7h-0.1l-0.9,6.7H9.4l-1-6.7h0L8.4,21.1z"/><path d="M15.8,9.8c0.4,0,3.2-0.1,4.7,0.1c1.2,0.1,1.8,1.1,1.9,2.3c0.1,2.2,0.1,4.4,0.1,6.6c0,0.2,0,0.5-0.1,0.8c-0.2,0.9-0.7,1.4-1.9,1.5c-1.5,0.1-3,0.1-4.4,0.1c0,0-0.1,0-0.2,0V9.8z M18.8,11.9v7.2c0.5,0,0.8-0.2,0.8-0.7c0-1.9,0-3.9,0-5.9C19.6,12,19.4,11.8,18.8,11.9z"/><path d="M2,21.1V9.9h2.9v11.2H2z"/><path d="M29.9,14.1c-0.1-0.8-0.6-1.2-1.4-1.4c-0.8-0.1-1.6,0-2.3,0.7V9.9h-2.8v11.2H26c0.1-0.2,0.1-0.4,0.2-0.5c0.1,0.1,0.2,0.2,0.3,0.3c0.7,0.5,1.5,0.6,2.3,0.3c0.7-0.3,1-0.9,1-1.6c0-0.8,0.1-1.7,0.1-2.6C30,16,30,15,29.9,14.1z M27.1,19.1c0,0.2-0.2,0.4-0.4,0.4s-0.4-0.2-0.4-0.4v-4.3c0-0.2,0.2-0.4,0.4-0.4s0.4,0.2,0.4,0.4V19.1z"/></svg>';
+    const LETTERBOXD_ICON = '<svg width="1.7em" height="1.7em" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="32" r="16" fill="#00e054"/><circle cx="32" cy="32" r="16" fill="#40bcf4" fill-opacity="0.82"/><circle cx="48" cy="32" r="16" fill="#ff8000" fill-opacity="0.82"/></svg>';
 
     let activeDetailsRoot = null;
     let activeSeasonRoot = null;
     let activeQualityRoot = null;
+    let activeInteractiveRoot = null;
+    let interactiveViewStack = [];
+    let interactiveContext = null;
     let escapeHandler = null;
+    let cachedIsAdmin = null;
 
     function escapeHtml(text) {
         const div = document.createElement('div');
@@ -185,6 +190,9 @@ window.seerrFinLog = window.seerrFinLog || {
             status: raw.status,
             originCountry: raw.origin_country || [],
             productionCountries: raw.production_countries || [],
+            productionCompanies: raw.production_companies || [],
+            revenue: raw.revenue,
+            budget: raw.budget,
             adult: raw.adult,
             genres: raw.genres || [],
             credits: raw.credits || {},
@@ -220,6 +228,7 @@ window.seerrFinLog = window.seerrFinLog || {
             status: raw.status,
             originCountry: raw.origin_country || [],
             productionCountries: raw.production_countries || [],
+            productionCompanies: raw.production_companies || [],
             networks: raw.networks || [],
             genres: raw.genres || [],
             credits: raw.credits || {},
@@ -232,7 +241,7 @@ window.seerrFinLog = window.seerrFinLog || {
         }
 
         if (raw.external_ids) {
-            details.externalIds = { imdbId: raw.external_ids.imdb_id };
+            details.externalIds = { imdbId: raw.external_ids.imdb_id, tvdbId: raw.external_ids.tvdb_id };
         }
 
         return details;
@@ -480,29 +489,6 @@ window.seerrFinLog = window.seerrFinLog || {
             });
     }
 
-    function formatRuntime(minutes) {
-        if (!minutes) {
-            return '';
-        }
-        const h = Math.floor(minutes / 60);
-        const m = minutes % 60;
-        if (h && m) {
-            return h + 'h ' + m + 'm';
-        }
-        if (h) {
-            return h + 'h';
-        }
-        return m + 'm';
-    }
-
-    function formatEndsAt(minutes) {
-        if (!minutes) {
-            return '';
-        }
-        const end = new Date(Date.now() + minutes * 60 * 1000);
-        return end.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-    }
-
     function formatReleaseDate(dateStr) {
         if (!dateStr) {
             return '';
@@ -568,24 +554,154 @@ window.seerrFinLog = window.seerrFinLog || {
         return (flag ? flag + ' ' : '') + (name || value);
     }
 
-    function getProductionCountry(data) {
-        const countries = data.productionCountries || data.production_countries || [];
-        const first = Array.isArray(countries) && countries.length ? countries[0] : null;
-        const code = first && (first.iso_3166_1 || first.iso31661);
-        if (code) {
-            return formatCountry(code);
-        }
-
-        const origin = data.originCountry || data.origin_country || [];
-        return Array.isArray(origin) && origin.length ? formatCountry(origin[0]) : '';
-    }
-
-    function getNetworkName(data) {
-        const networks = data.networks || [];
-        if (!Array.isArray(networks) || !networks.length) {
+    function formatCurrency(amount) {
+        if (!amount) {
             return '';
         }
-        return networks.map(function (network) { return network.name; }).filter(Boolean).join(', ');
+        try {
+            return new Intl.NumberFormat(navigator.language || 'en-US', {
+                style: 'currency',
+                currency: 'USD'
+            }).format(amount);
+        } catch (err) {
+            return '$' + Number(amount).toLocaleString();
+        }
+    }
+
+    function getProductionCountriesList(data) {
+        const countries = data.productionCountries || data.production_countries || [];
+        if (Array.isArray(countries) && countries.length) {
+            return countries.map(function (c) {
+                const code = c.iso_3166_1 || c.iso31661;
+                return code ? formatCountry(code) : (c.name || '');
+            }).filter(Boolean);
+        }
+        const origin = data.originCountry || data.origin_country || [];
+        return Array.isArray(origin) ? origin.map(formatCountry).filter(Boolean) : [];
+    }
+
+    function getStudios(data) {
+        const companies = data.productionCompanies || data.production_companies || [];
+        return companies.map(function (c) { return c.name; }).filter(Boolean).slice(0, 6);
+    }
+
+    function getMovieReleaseDateEvents(data) {
+        const releaseDates = data.releaseDates || data.release_dates;
+        const results = releaseDates && releaseDates.results;
+        if (!Array.isArray(results) || !results.length) {
+            return null;
+        }
+
+        const region = results.find(function (r) { return r.iso_3166_1 === getRegionCode(); })
+            || results.find(function (r) { return r.iso_3166_1 === 'US'; });
+        let entries = (region && region.release_dates) || [];
+        if (!entries.length) {
+            entries = results.reduce(function (all, r) { return all.concat(r.release_dates || []); }, []);
+        }
+
+        function firstOfType(types) {
+            const match = entries
+                .filter(function (e) { return types.indexOf(e.type) !== -1; })
+                .sort(function (a, b) { return new Date(a.release_date) - new Date(b.release_date); })[0];
+            return match ? formatReleaseDate(match.release_date) : '';
+        }
+
+        const theatrical = firstOfType([3, 2, 1]);
+        const digital = firstOfType([4]);
+        const physical = firstOfType([5]);
+        if (!theatrical && !digital && !physical) {
+            return null;
+        }
+
+        return { theatrical: theatrical, digital: digital, physical: physical };
+    }
+
+    function fetchCombinedRatings(mediaId, mediaType) {
+        const path = mediaType === 'tv'
+            ? 'tv/' + mediaId + '/ratings'
+            : 'movie/' + mediaId + '/ratingscombined';
+
+        return ApiClient.ajax({
+            url: ApiClient.getUrl('SeerrFin/jellyseerr/' + path),
+            type: 'GET',
+            dataType: 'json'
+        }).then(function (result) {
+            // tv/:id/ratings returns a bare RT object; movie/:id/ratingscombined returns { rt, imdb }
+            return mediaType === 'tv' ? { rt: result } : result;
+        }).catch(function () {
+            return null;
+        });
+    }
+
+    function buildRatingBadgesHtml(ratings, voteAverage) {
+        const badges = [];
+        const rt = ratings && ratings.rt;
+        const imdb = ratings && ratings.imdb;
+
+        if (rt && rt.criticsScore != null) {
+            const icon = rt.criticsScore >= 60 ? '🍅' : '🤢';
+            badges.push(
+                '<span class="bst-rating-badge bst-rating-rt-critics" title="Rotten Tomatoes critics score">' +
+                '<span class="bst-rating-icon">' + icon + '</span>' +
+                '<span class="bst-rating-value">' + Math.round(rt.criticsScore) + '%</span></span>'
+            );
+        }
+
+        if (rt && rt.audienceScore != null) {
+            const icon = rt.audienceScore >= 60 ? '🍿' : '💔';
+            badges.push(
+                '<span class="bst-rating-badge bst-rating-rt-audience" title="Rotten Tomatoes audience score">' +
+                '<span class="bst-rating-icon">' + icon + '</span>' +
+                '<span class="bst-rating-value">' + Math.round(rt.audienceScore) + '%</span></span>'
+            );
+        }
+
+        if (imdb && imdb.criticsScore != null) {
+            badges.push(
+                '<span class="bst-rating-badge bst-rating-imdb" title="IMDb rating">' +
+                '<span class="bst-rating-icon bst-rating-icon-imdb">' + IMDB_ICON + '</span>' +
+                '<span class="bst-rating-value">' + Number(imdb.criticsScore).toFixed(1) + '</span></span>'
+            );
+        }
+
+        if (voteAverage) {
+            badges.push(
+                '<span class="bst-rating-badge bst-rating-tmdb" title="TMDB score">' +
+                '<span class="bst-rating-icon bst-rating-icon-tmdb">' + TMDB_LOGO_SVG + '</span>' +
+                '<span class="bst-rating-value">' + Math.round(voteAverage * 10) + '%</span></span>'
+            );
+        }
+
+        return badges.join('');
+    }
+
+    function buildRatingBadgesPlaceholder() {
+        return mountFromHtml('<div class="bst-rating-badges" hidden></div>');
+    }
+
+    function applyRatingBadges(slot, ratings, voteAverage) {
+        const html = buildRatingBadgesHtml(ratings, voteAverage);
+        if (!html) {
+            slot.remove();
+            return;
+        }
+        slot.innerHTML = html;
+        slot.hidden = false;
+    }
+
+    function getNetworkNames(data) {
+        const networks = data.networks || [];
+        if (!Array.isArray(networks) || !networks.length) {
+            return [];
+        }
+        return networks.map(function (network) { return network.name; }).filter(Boolean);
+    }
+
+    function formatEpisodeRuntime(minutes) {
+        if (!minutes) {
+            return '';
+        }
+        return minutes + ' minutes';
     }
 
     function getWatchProviderItems(data) {
@@ -638,56 +754,66 @@ window.seerrFinLog = window.seerrFinLog || {
             </div>`;
     }
 
-    function renderMetadataRows(data, mediaType, runtime, endsAt, language, releaseLabel, certification, tmdbId) {
+    function renderMetaValue(value) {
+        if (Array.isArray(value)) {
+            return value.map(function (line) {
+                return '<span class="bst-meta-value-line">' + escapeHtml(line) + '</span>';
+            }).join('');
+        }
+        return escapeHtml(value);
+    }
+
+    function renderMetadataRows(data, mediaType, episodeRuntimeMinutes, language, releaseLabel, extra) {
+        extra = extra || {};
         const rows = [];
         const status = data.status || '';
-        const country = getProductionCountry(data);
-        const network = mediaType === 'tv' ? getNetworkName(data) : '';
-        const nextAirLabel = mediaType === 'tv' ? formatReleaseDate(data.nextAirDate || data.next_episode_to_air?.air_date) : '';
+        const countries = getProductionCountriesList(data);
 
         if (mediaType === 'tv') {
+            const nextAirDateRaw = data.nextAirDate || (data.next_episode_to_air && data.next_episode_to_air.air_date);
+            const nextAirLabel = nextAirDateRaw && nextAirDateRaw !== (data.firstAirDate || data.first_air_date)
+                ? formatReleaseDate(nextAirDateRaw)
+                : '';
+            const networks = getNetworkNames(data);
+            const episodeRuntimeLabel = formatEpisodeRuntime(episodeRuntimeMinutes);
+
             if (status) rows.push(['Status', status]);
             if (releaseLabel) rows.push(['First Air Date', releaseLabel]);
             if (nextAirLabel) rows.push(['Next Air Date', nextAirLabel]);
+            if (episodeRuntimeLabel) rows.push(['Episode Runtime', episodeRuntimeLabel]);
             if (language) rows.push(['Original Language', language]);
-            if (country) rows.push(['Production Country', country]);
-            if (network) rows.push(['Network', network]);
+            if (countries.length) rows.push(['Production Countries', countries.length > 1 ? countries : countries[0]]);
+            if (networks.length) rows.push(['Network', networks.length > 1 ? networks : networks[0]]);
         } else {
             if (status) rows.push(['Status', status]);
-            if (releaseLabel) rows.push(['Release Date', releaseLabel]);
-            if (runtime) rows.push(['Runtime', runtime + (endsAt ? ' • Ends at ' + endsAt : '')]);
-            if (language) rows.push(['Original Language', language]);
-            if (country) rows.push(['Production Country', country]);
-        }
 
-        if (certification) rows.push(['Rating', certification]);
-        if (tmdbId) rows.push(['TMDB ID', String(tmdbId)]);
+            const releaseDateEvents = extra.releaseDateEvents;
+            if (releaseDateEvents) {
+                const lines = [];
+                if (releaseDateEvents.theatrical) lines.push('🎬 ' + releaseDateEvents.theatrical);
+                if (releaseDateEvents.digital) lines.push('☁️ ' + releaseDateEvents.digital);
+                if (releaseDateEvents.physical) lines.push('💿 ' + releaseDateEvents.physical);
+                if (lines.length) rows.push(['Release Dates', lines]);
+            } else if (releaseLabel) {
+                rows.push(['Release Date', releaseLabel]);
+            }
+
+            if (extra.revenue) rows.push(['Revenue', formatCurrency(extra.revenue)]);
+            if (extra.budget) rows.push(['Budget', formatCurrency(extra.budget)]);
+            if (language) rows.push(['Original Language', language]);
+            if (countries.length) rows.push(['Production Countries', countries.length > 1 ? countries : countries[0]]);
+            if (extra.studios && extra.studios.length) {
+                rows.push(['Studios', extra.studios.length > 1 ? extra.studios : extra.studios[0]]);
+            }
+        }
 
         return rows.map(function (row) {
             return `
                 <div class="bst-meta-row">
                     <span class="bst-label">${escapeHtml(row[0])}</span>
-                    <span class="bst-meta-value">${escapeHtml(row[1])}</span>
+                    <span class="bst-meta-value">${renderMetaValue(row[1])}</span>
                 </div>`;
         }).join('');
-    }
-
-    function getCertification(data, mediaType) {
-        // Get a US certification from Tmdb release_dates (movies) or content_ratings (TV)
-        if (mediaType === 'movie' && data.releaseDates) {
-            const us = (data.releaseDates.results || []).find(function (r) { return r.iso_3166_1 === 'US'; });
-            const rel = us && us.release_dates && us.release_dates.find(function (rd) { return rd.certification; });
-            if (rel && rel.certification) {
-                return rel.certification;
-            }
-        }
-        if (mediaType === 'tv' && data.contentRatings) {
-            const us = (data.contentRatings.results || []).find(function (r) { return r.iso_3166_1 === 'US'; });
-            if (us && us.rating) {
-                return us.rating;
-            }
-        }
-        return '';
     }
 
     function getTrailerKey(data) {
@@ -751,15 +877,329 @@ window.seerrFinLog = window.seerrFinLog || {
         }
     }
 
+    function closeInteractiveSearchModal() {
+        if (activeInteractiveRoot) {
+            activeInteractiveRoot.remove();
+            activeInteractiveRoot = null;
+        }
+        interactiveViewStack = [];
+        interactiveContext = null;
+    }
+
     function closeDetailsModal() {
         closeQualityModal();
         closeSeasonModal();
+        closeInteractiveSearchModal();
         if (activeDetailsRoot) {
             activeDetailsRoot.remove();
             activeDetailsRoot = null;
         }
         removeEscapeHandler();
         document.body.style.overflow = '';
+    }
+
+    function isCurrentUserAdmin() {
+        if (cachedIsAdmin !== null) {
+            return Promise.resolve(cachedIsAdmin);
+        }
+        return ApiClient.getCurrentUser().then(function (user) {
+            cachedIsAdmin = !!(user && user.Policy && user.Policy.IsAdministrator);
+            return cachedIsAdmin;
+        }).catch(function () {
+            return false;
+        });
+    }
+
+    function fetchInteractiveJson(path) {
+        return ApiClient.ajax({
+            url: ApiClient.getUrl('SeerrFin/' + path),
+            type: 'GET',
+            dataType: 'json'
+        });
+    }
+
+    function formatReleaseBytes(bytes) {
+        if (!bytes) {
+            return '';
+        }
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        let value = bytes;
+        let unitIndex = 0;
+        while (value >= 1024 && unitIndex < units.length - 1) {
+            value /= 1024;
+            unitIndex++;
+        }
+        return (value >= 10 || unitIndex === 0 ? Math.round(value) : value.toFixed(1)) + ' ' + units[unitIndex];
+    }
+
+    function formatReleaseAge(release) {
+        if (release.ageHours != null && release.ageHours < 48) {
+            return Math.round(release.ageHours) + 'h';
+        }
+        if (release.age != null) {
+            return release.age + 'd';
+        }
+        return '';
+    }
+
+    function renderInteractiveError(body, err) {
+        const message = (err && err.error && err.error.message)
+            || (typeof err === 'string' ? err : null)
+            || 'Something went wrong.';
+        body.innerHTML = `<div class="bst-quality-empty">${escapeHtml(message)}</div>`;
+    }
+
+    function parseAjaxErrorMessage(err) {
+        try {
+            const raw = err && (err.responseText || (err.response && err.response.text));
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.message) {
+                    return parsed.message;
+                }
+            }
+        } catch (parseErr) {
+            // fall through to generic message
+        }
+        return null;
+    }
+
+    function renderReleaseList(body, releases, grabKind) {
+        if (!releases || !releases.length) {
+            body.innerHTML = '<div class="bst-quality-empty">No releases found.</div>';
+            return;
+        }
+
+        const sorted = releases.slice().sort(function (a, b) {
+            return (b.seeders || 0) - (a.seeders || 0);
+        });
+
+        body.innerHTML = sorted.map(function (release, index) {
+            const quality = release.quality && release.quality.quality && release.quality.quality.name;
+            const size = formatReleaseBytes(release.size);
+            const age = formatReleaseAge(release);
+            const seeders = release.seeders != null ? release.seeders : null;
+            const leechers = release.leechers != null ? release.leechers : null;
+            const rejected = !!release.rejected;
+            const rejectionText = (release.rejections || []).join(', ');
+            const metaParts = [quality, size, age, release.indexer].filter(Boolean);
+            const seederPart = seeders != null ? (seeders + ' seeders' + (leechers != null ? '/' + leechers + ' peers' : '')) : '';
+            if (seederPart) {
+                metaParts.push(seederPart);
+            }
+
+            return `
+                <div class="bst-interactive-release${rejected ? ' bst-interactive-release-rejected' : ''}">
+                    <div class="bst-interactive-release-main">
+                        <span class="bst-interactive-release-title" title="${escapeHtml(release.title || '')}">${escapeHtml(release.title || 'Unknown release')}</span>
+                        <span class="bst-interactive-release-meta">${escapeHtml(metaParts.join(' • '))}</span>
+                        ${rejected && rejectionText ? `<span class="bst-interactive-release-rejection">${escapeHtml(rejectionText)}</span>` : ''}
+                    </div>
+                    <button type="button" class="bst-quality-option bst-interactive-grab-btn" data-index="${index}"${rejected ? ' disabled' : ''}>
+                        ${rejected ? 'Rejected' : 'Download'}
+                    </button>
+                </div>`;
+        }).join('');
+
+        body.querySelectorAll('.bst-interactive-grab-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const release = sorted[parseInt(btn.getAttribute('data-index'), 10)];
+                btn.disabled = true;
+                btn.textContent = 'Grabbing…';
+                grabInteractiveRelease(release, grabKind).then(function () {
+                    btn.textContent = 'Sent to download client';
+                }).catch(function (err) {
+                    btn.disabled = false;
+                    btn.textContent = 'Download';
+                    log.error('grab release failed', err);
+                    renderInteractiveError(body, parseAjaxErrorMessage(err) || 'Failed to grab that release — search again.');
+                });
+            });
+        });
+    }
+
+    function grabInteractiveRelease(release, grabKind) {
+        const path = grabKind === 'movie' ? 'interactive-search/movie/grab' : 'interactive-search/series/grab';
+        return ApiClient.ajax({
+            url: ApiClient.getUrl('SeerrFin/' + path),
+            type: 'POST',
+            data: JSON.stringify(release),
+            contentType: 'application/json',
+            dataType: 'json'
+        });
+    }
+
+    function loadMovieReleases(body) {
+        body.innerHTML = '<div class="bst-quality-loading">Searching indexers…</div>';
+        fetchInteractiveJson('interactive-search/movie/' + interactiveContext.tmdbId + '/releases').then(function (releases) {
+            renderReleaseList(body, releases, 'movie');
+        }).catch(function (err) {
+            renderInteractiveError(body, parseAjaxErrorMessage(err) || 'Failed to search Radarr.');
+        });
+    }
+
+    function loadSeriesSeasons(body) {
+        body.innerHTML = '<div class="bst-quality-loading">Loading seasons…</div>';
+        fetchInteractiveJson('interactive-search/series/' + interactiveContext.tmdbId).then(function (info) {
+            const seasons = (info.seasons || []).filter(function (s) { return s.seasonNumber > 0; });
+            if (!seasons.length) {
+                body.innerHTML = '<div class="bst-quality-empty">No seasons found.</div>';
+                return;
+            }
+
+            body.innerHTML = seasons.map(function (season) {
+                return `
+                    <div class="bst-interactive-row">
+                        <div class="bst-interactive-row-main">
+                            <span class="bst-interactive-row-title">Season ${season.seasonNumber}</span>
+                            <span class="bst-interactive-row-sub">${season.episodeCount || 0} episodes</span>
+                        </div>
+                        <div class="bst-interactive-row-actions">
+                            <button type="button" class="bst-quality-option bst-interactive-season-search-btn" data-season="${season.seasonNumber}">Search Season</button>
+                            <button type="button" class="bst-quality-option bst-interactive-episodes-btn" data-season="${season.seasonNumber}">Episodes ▸</button>
+                        </div>
+                    </div>`;
+            }).join('');
+
+            body.querySelectorAll('.bst-interactive-season-search-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    pushInteractiveView({ type: 'season-releases', seasonNumber: parseInt(btn.getAttribute('data-season'), 10) });
+                });
+            });
+            body.querySelectorAll('.bst-interactive-episodes-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    pushInteractiveView({ type: 'episodes', seasonNumber: parseInt(btn.getAttribute('data-season'), 10) });
+                });
+            });
+        }).catch(function (err) {
+            renderInteractiveError(body, parseAjaxErrorMessage(err) || 'Failed to load seasons from Sonarr.');
+        });
+    }
+
+    function loadSeasonEpisodes(body, seasonNumber) {
+        body.innerHTML = '<div class="bst-quality-loading">Loading episodes…</div>';
+        fetchInteractiveJson('interactive-search/series/' + interactiveContext.tmdbId + '/season/' + seasonNumber + '/episodes').then(function (episodes) {
+            if (!episodes || !episodes.length) {
+                body.innerHTML = '<div class="bst-quality-empty">No episodes found.</div>';
+                return;
+            }
+
+            body.innerHTML = episodes
+                .slice()
+                .sort(function (a, b) { return (a.episodeNumber || 0) - (b.episodeNumber || 0); })
+                .map(function (episode) {
+                    const epTitle = episode.title || ('Episode ' + episode.episodeNumber);
+                    return `
+                        <div class="bst-interactive-row">
+                            <div class="bst-interactive-row-main">
+                                <span class="bst-interactive-row-title">E${episode.episodeNumber} — ${escapeHtml(epTitle)}</span>
+                            </div>
+                            <div class="bst-interactive-row-actions">
+                                <button type="button" class="bst-quality-option bst-interactive-episode-search-btn"
+                                    data-episode-id="${episode.id}" data-episode-label="${escapeHtml('S' + seasonNumber + 'E' + episode.episodeNumber)}">Search</button>
+                            </div>
+                        </div>`;
+                }).join('');
+
+            body.querySelectorAll('.bst-interactive-episode-search-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    pushInteractiveView({
+                        type: 'episode-releases',
+                        episodeId: parseInt(btn.getAttribute('data-episode-id'), 10),
+                        episodeLabel: btn.getAttribute('data-episode-label')
+                    });
+                });
+            });
+        }).catch(function (err) {
+            renderInteractiveError(body, parseAjaxErrorMessage(err) || 'Failed to load episodes from Sonarr.');
+        });
+    }
+
+    function loadSeasonReleases(body, seasonNumber) {
+        body.innerHTML = '<div class="bst-quality-loading">Searching indexers…</div>';
+        fetchInteractiveJson('interactive-search/series/' + interactiveContext.tmdbId + '/season/' + seasonNumber + '/releases').then(function (releases) {
+            renderReleaseList(body, releases, 'series');
+        }).catch(function (err) {
+            renderInteractiveError(body, parseAjaxErrorMessage(err) || 'Failed to search Sonarr.');
+        });
+    }
+
+    function loadEpisodeReleases(body, episodeId) {
+        body.innerHTML = '<div class="bst-quality-loading">Searching indexers…</div>';
+        fetchInteractiveJson('interactive-search/episode/' + episodeId + '/releases').then(function (releases) {
+            renderReleaseList(body, releases, 'series');
+        }).catch(function (err) {
+            renderInteractiveError(body, parseAjaxErrorMessage(err) || 'Failed to search Sonarr.');
+        });
+    }
+
+    function renderCurrentInteractiveView() {
+        if (!activeInteractiveRoot) {
+            return;
+        }
+
+        const view = interactiveViewStack[interactiveViewStack.length - 1];
+        const backBtn = activeInteractiveRoot.querySelector('.bst-interactive-back');
+        const titleEl = activeInteractiveRoot.querySelector('.bst-interactive-title');
+        const body = activeInteractiveRoot.querySelector('.bst-interactive-body');
+        backBtn.hidden = interactiveViewStack.length <= 1;
+
+        if (view.type === 'movie-releases') {
+            titleEl.textContent = 'Interactive Search';
+            loadMovieReleases(body);
+        } else if (view.type === 'seasons') {
+            titleEl.textContent = 'Interactive Search — Seasons';
+            loadSeriesSeasons(body);
+        } else if (view.type === 'episodes') {
+            titleEl.textContent = 'Season ' + view.seasonNumber + ' — Episodes';
+            loadSeasonEpisodes(body, view.seasonNumber);
+        } else if (view.type === 'season-releases') {
+            titleEl.textContent = 'Season ' + view.seasonNumber + ' Releases';
+            loadSeasonReleases(body, view.seasonNumber);
+        } else if (view.type === 'episode-releases') {
+            titleEl.textContent = view.episodeLabel + ' Releases';
+            loadEpisodeReleases(body, view.episodeId);
+        }
+    }
+
+    function pushInteractiveView(view) {
+        interactiveViewStack.push(view);
+        renderCurrentInteractiveView();
+    }
+
+    function interactiveSearchGoBack() {
+        if (interactiveViewStack.length > 1) {
+            interactiveViewStack.pop();
+            renderCurrentInteractiveView();
+        }
+    }
+
+    function renderInteractiveSearchShell() {
+        return `
+            <div class="bst-quality-wrapper bst-interactive-search-wrapper">
+                <div class="bst-quality-backdrop"></div>
+                <div class="bst-quality-panel bst-interactive-search-panel" role="dialog" aria-modal="true">
+                    <div class="bst-quality-header">
+                        <button type="button" class="bst-interactive-back" aria-label="Back" hidden>←</button>
+                        <h3 class="bst-interactive-title">Interactive Search</h3>
+                        <button type="button" class="bst-quality-close" aria-label="Close">${CLOSE_ICON}</button>
+                    </div>
+                    <div class="bst-quality-list bst-interactive-body"><div class="bst-quality-loading">Loading…</div></div>
+                </div>
+            </div>`;
+    }
+
+    function openInteractiveSearchModal(tmdbId, mediaType, title) {
+        closeInteractiveSearchModal();
+        interactiveContext = { tmdbId: tmdbId, mediaType: mediaType, title: title };
+
+        document.body.insertAdjacentHTML('beforeend', renderInteractiveSearchShell());
+        activeInteractiveRoot = document.body.lastElementChild;
+        activeInteractiveRoot.querySelector('.bst-quality-backdrop').addEventListener('click', closeInteractiveSearchModal);
+        activeInteractiveRoot.querySelector('.bst-quality-close').addEventListener('click', closeInteractiveSearchModal);
+        activeInteractiveRoot.querySelector('.bst-interactive-back').addEventListener('click', interactiveSearchGoBack);
+
+        pushInteractiveView(mediaType === 'movie' ? { type: 'movie-releases' } : { type: 'seasons' });
     }
 
     function getRequestableSeasons(details) {
@@ -1266,21 +1706,24 @@ window.seerrFinLog = window.seerrFinLog || {
         const rating = data.voteAverage != null ? data.voteAverage : data.vote_average;
         const voteCount = data.voteCount != null ? data.voteCount : data.vote_count;
         const backdrop = resolveImageUrl(data.backdropUrl || data.backdrop_url || '') || tmdbImage(data.backdropPath || data.backdrop_path, 'original');
-        const runtimeMinutes = data.runtime || (data.episodeRunTime && data.episodeRunTime[0]);
-        const runtime = formatRuntime(runtimeMinutes);
-        const endsAt = formatEndsAt(runtimeMinutes);
+        const episodeRuntimeMinutes = mediaType === 'tv' ? (data.episodeRunTime && data.episodeRunTime[0]) : null;
         const language = formatLanguage(data.originalLanguage || data.original_language);
         const releaseLabel = formatReleaseDate(data.releaseDate || data.firstAirDate);
-        const certification = getCertification(data, mediaType);
         const genres = data.genres || [];
         const cast = getCast(data);
         const trailerKey = getTrailerKey(data);
         const tmdbId = data.id;
+        const tvdbId = data.externalIds && (data.externalIds.tvdbId || data.externalIds.tvdb_id);
         const imdbId = data.externalIds && (data.externalIds.imdbId || data.externalIds.imdb_id);
         const logoUrl = getLogoImageUrl(data);
         const requestState = getRequestButtonState(data, false);
         const request4kState = getRequestButtonState(data, true);
-        const metadataRows = renderMetadataRows(data, mediaType, runtime, endsAt, language, releaseLabel, certification, tmdbId);
+        const metadataRows = renderMetadataRows(data, mediaType, episodeRuntimeMinutes, language, releaseLabel, {
+            revenue: mediaType === 'movie' ? data.revenue : null,
+            budget: mediaType === 'movie' ? data.budget : null,
+            studios: getStudios(data),
+            releaseDateEvents: mediaType === 'movie' ? getMovieReleaseDateEvents(data) : null
+        });
         const providerLogos = renderProviderLogos(data);
 
         return `
@@ -1317,6 +1760,7 @@ window.seerrFinLog = window.seerrFinLog || {
                                                 ${getRequestModalAdvanced().showRequest4kButton !== false
                                                     ? `<button type="button" class="bst-btn-request-4k" data-action="request-4k"${request4kState.requested ? ' disabled' : ''}>${escapeHtml(request4kState.label)}</button>`
                                                     : ''}
+                                                <button type="button" class="bst-btn-interactive-search" data-action="interactive-search" hidden>Interactive Search</button>
                                                 ${trailerKey
                                                     ? `<button type="button" class="bst-btn-trailer" data-action="trailer" data-trailer-key="${escapeHtml(trailerKey)}">Trailer</button>`
                                                     : ''}
@@ -1339,10 +1783,34 @@ window.seerrFinLog = window.seerrFinLog || {
                                                                 target="_blank" rel="noopener noreferrer" title="View on TMDB" style="animation-delay:60ms">
                                                                 ${TMDB_LOGO_SVG}
                                                             </a>` : ''}
+                                                        ${tvdbId && mediaType === 'tv' ? `
+                                                            <a class="bst-external-link tvdb" href="https://www.thetvdb.com/?tab=series&id=${tvdbId}"
+                                                                target="_blank" rel="noopener noreferrer" title="View on TheTVDB" style="animation-delay:90ms">
+                                                                <span class="bst-external-link-text">tvdb</span>
+                                                            </a>` : ''}
                                                         ${imdbId ? `
                                                             <a class="bst-external-link imdb" href="https://www.imdb.com/title/${imdbId}"
                                                                 target="_blank" rel="noopener noreferrer" title="View on IMDb" style="animation-delay:120ms">
                                                                 ${IMDB_ICON}
+                                                            </a>` : ''}
+                                                        <a class="bst-external-link rt" data-rt-link-slot href="#" hidden
+                                                            target="_blank" rel="noopener noreferrer" title="View on Rotten Tomatoes" style="animation-delay:150ms">
+                                                            <span class="bst-external-link-text">RT</span>
+                                                        </a>
+                                                        ${imdbId ? `
+                                                            <a class="bst-external-link trakt" href="https://trakt.tv/${mediaType === 'movie' ? 'movies' : 'shows'}/${imdbId}"
+                                                                target="_blank" rel="noopener noreferrer" title="View on Trakt" style="animation-delay:180ms">
+                                                                <span class="bst-external-link-text">tr</span>
+                                                            </a>` : ''}
+                                                        ${imdbId ? `
+                                                            <a class="bst-external-link simkl" href="https://api.simkl.com/redirect?to=Simkl&imdb=${encodeURIComponent(imdbId)}"
+                                                                target="_blank" rel="noopener noreferrer" title="View on Simkl" style="animation-delay:210ms">
+                                                                <span class="bst-external-link-text">S</span>
+                                                            </a>` : ''}
+                                                        ${tmdbId && mediaType === 'movie' ? `
+                                                            <a class="bst-external-link letterboxd" href="https://letterboxd.com/tmdb/${tmdbId}"
+                                                                target="_blank" rel="noopener noreferrer" title="View on Letterboxd" style="animation-delay:240ms">
+                                                                ${LETTERBOXD_ICON}
                                                             </a>` : ''}
                                                     </div>` : ''}
                                             </div>
@@ -1395,12 +1863,38 @@ window.seerrFinLog = window.seerrFinLog || {
             });
         }
 
+        const interactiveSearchBtn = root.querySelector('[data-action="interactive-search"]');
+        if (interactiveSearchBtn && tmdbId) {
+            interactiveSearchBtn.addEventListener('click', function () {
+                openInteractiveSearchModal(tmdbId, mediaType, title);
+            });
+            isCurrentUserAdmin().then(function (isAdmin) {
+                interactiveSearchBtn.hidden = !isAdmin;
+            });
+        }
+
         const settings = window.seerrFinPlugin && window.seerrFinPlugin._displaySettings;
         const showQualityRecommendations = !settings || settings.QualityRecommendations !== false;
+        const qualitySlot = root.querySelector('[data-quality-slot]');
         if (showQualityRecommendations && tmdbId) {
-            const qualitySlot = root.querySelector('[data-quality-slot]');
             const qualityLines = buildJustWatchQualityLines(tmdbId, mediaType);
             qualitySlot.insertBefore(qualityLines, qualitySlot.firstChild);
+        }
+
+        if (tmdbId) {
+            const voteAverage = data.voteAverage != null ? data.voteAverage : data.vote_average;
+            const ratingBadgesSlot = buildRatingBadgesPlaceholder();
+            qualitySlot.insertBefore(ratingBadgesSlot, qualitySlot.firstChild);
+
+            fetchCombinedRatings(tmdbId, mediaType).then(function (ratings) {
+                applyRatingBadges(ratingBadgesSlot, ratings, voteAverage);
+
+                const rtLink = root.querySelector('[data-rt-link-slot]');
+                if (rtLink && ratings && ratings.rt && ratings.rt.url) {
+                    rtLink.href = ratings.rt.url;
+                    rtLink.hidden = false;
+                }
+            });
         }
     }
 
@@ -1442,6 +1936,8 @@ window.seerrFinLog = window.seerrFinLog || {
                         closeQualityModal();
                     } else if (activeSeasonRoot) {
                         closeSeasonModal();
+                    } else if (activeInteractiveRoot) {
+                        closeInteractiveSearchModal();
                     } else {
                         closeDetailsModal();
                     }

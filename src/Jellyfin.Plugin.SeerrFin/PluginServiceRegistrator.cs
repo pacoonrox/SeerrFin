@@ -29,6 +29,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<JellyseerrRequestService>();
         serviceCollection.AddSingleton<JellyseerrRequestsService>();
         serviceCollection.AddSingleton<ServarrProgressService>();
+        serviceCollection.AddSingleton<ServarrInteractiveSearchService>();
         serviceCollection.AddSingleton<JellyseerrProxyService>();
         serviceCollection.AddSingleton<LetterboxdWatchlistService>();
         serviceCollection.AddSingleton<LetterboxdBulkRequestService>();

@@ -22,6 +22,7 @@ public class SeerrFinController : ControllerBase
     private readonly JellyseerrRequestsService _requestsService;
     private readonly JellyseerrProxyService _proxyService;
     private readonly ServarrProgressService _servarrProgressService;
+    private readonly ServarrInteractiveSearchService _interactiveSearchService;
     private readonly ImageCacheService _imageCacheService;
     private readonly TmdbBackdropService _tmdbBackdropService;
     private readonly JustWatchQualitiesService _justWatchQualitiesService;
@@ -34,6 +35,7 @@ public class SeerrFinController : ControllerBase
         JellyseerrRequestsService requestsService,
         JellyseerrProxyService proxyService,
         ServarrProgressService servarrProgressService,
+        ServarrInteractiveSearchService interactiveSearchService,
         ImageCacheService imageCacheService,
         TmdbBackdropService tmdbBackdropService,
         JustWatchQualitiesService justWatchQualitiesService,
@@ -45,6 +47,7 @@ public class SeerrFinController : ControllerBase
         _requestsService = requestsService;
         _proxyService = proxyService;
         _servarrProgressService = servarrProgressService;
+        _interactiveSearchService = interactiveSearchService;
         _imageCacheService = imageCacheService;
         _tmdbBackdropService = tmdbBackdropService;
         _justWatchQualitiesService = justWatchQualitiesService;
@@ -167,6 +170,80 @@ public class SeerrFinController : ControllerBase
             Content = responseBody,
             ContentType = contentType
         };
+    }
+
+    [HttpGet("interactive-search/movie/{tmdbId:int}/releases")]
+    [Authorize(Roles = "Administrator")]
+    public async Task<IActionResult> GetMovieInteractiveReleases(int tmdbId, CancellationToken cancellationToken)
+    {
+        (int statusCode, string body) = await _interactiveSearchService
+            .GetMovieReleasesAsync(tmdbId, cancellationToken)
+            .ConfigureAwait(false);
+        return new ContentResult { StatusCode = statusCode, Content = body, ContentType = "application/json" };
+    }
+
+    [HttpGet("interactive-search/series/{tmdbId:int}")]
+    [Authorize(Roles = "Administrator")]
+    public async Task<IActionResult> GetSeriesInteractiveInfo(int tmdbId, CancellationToken cancellationToken)
+    {
+        (int statusCode, string body) = await _interactiveSearchService
+            .GetSeriesInfoAsync(tmdbId, cancellationToken)
+            .ConfigureAwait(false);
+        return new ContentResult { StatusCode = statusCode, Content = body, ContentType = "application/json" };
+    }
+
+    [HttpGet("interactive-search/series/{tmdbId:int}/season/{seasonNumber:int}/episodes")]
+    [Authorize(Roles = "Administrator")]
+    public async Task<IActionResult> GetSeasonInteractiveEpisodes(int tmdbId, int seasonNumber, CancellationToken cancellationToken)
+    {
+        (int statusCode, string body) = await _interactiveSearchService
+            .GetSeasonEpisodesAsync(tmdbId, seasonNumber, cancellationToken)
+            .ConfigureAwait(false);
+        return new ContentResult { StatusCode = statusCode, Content = body, ContentType = "application/json" };
+    }
+
+    [HttpGet("interactive-search/series/{tmdbId:int}/season/{seasonNumber:int}/releases")]
+    [Authorize(Roles = "Administrator")]
+    public async Task<IActionResult> GetSeasonInteractiveReleases(int tmdbId, int seasonNumber, CancellationToken cancellationToken)
+    {
+        (int statusCode, string body) = await _interactiveSearchService
+            .GetSeasonReleasesAsync(tmdbId, seasonNumber, cancellationToken)
+            .ConfigureAwait(false);
+        return new ContentResult { StatusCode = statusCode, Content = body, ContentType = "application/json" };
+    }
+
+    [HttpGet("interactive-search/episode/{episodeId:int}/releases")]
+    [Authorize(Roles = "Administrator")]
+    public async Task<IActionResult> GetEpisodeInteractiveReleases(int episodeId, CancellationToken cancellationToken)
+    {
+        (int statusCode, string body) = await _interactiveSearchService
+            .GetEpisodeReleasesAsync(episodeId, cancellationToken)
+            .ConfigureAwait(false);
+        return new ContentResult { StatusCode = statusCode, Content = body, ContentType = "application/json" };
+    }
+
+    [HttpPost("interactive-search/movie/grab")]
+    [Authorize(Roles = "Administrator")]
+    public async Task<IActionResult> GrabMovieInteractiveRelease(CancellationToken cancellationToken)
+    {
+        using StreamReader reader = new(Request.Body, Encoding.UTF8);
+        string body = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        (int statusCode, string responseBody) = await _interactiveSearchService
+            .GrabMovieReleaseAsync(body, cancellationToken)
+            .ConfigureAwait(false);
+        return new ContentResult { StatusCode = statusCode, Content = responseBody, ContentType = "application/json" };
+    }
+
+    [HttpPost("interactive-search/series/grab")]
+    [Authorize(Roles = "Administrator")]
+    public async Task<IActionResult> GrabSeriesInteractiveRelease(CancellationToken cancellationToken)
+    {
+        using StreamReader reader = new(Request.Body, Encoding.UTF8);
+        string body = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        (int statusCode, string responseBody) = await _interactiveSearchService
+            .GrabSeriesReleaseAsync(body, cancellationToken)
+            .ConfigureAwait(false);
+        return new ContentResult { StatusCode = statusCode, Content = responseBody, ContentType = "application/json" };
     }
 
     [HttpGet("Configuration")]
