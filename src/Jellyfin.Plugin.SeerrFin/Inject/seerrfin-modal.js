@@ -1312,10 +1312,21 @@ window.seerrFinLog = window.seerrFinLog || {
 
     function grabInteractiveRelease(release, grabKind) {
         const path = grabKind === 'movie' ? 'interactive-search/movie/grab' : 'interactive-search/series/grab';
+        const currentView = interactiveViewStack[interactiveViewStack.length - 1];
+
+        // Grabbing directly against Radarr/Sonarr bypasses Jellyseerr entirely, so without this
+        // the download would never show up in Seerr's own Downloads tab. Send along enough
+        // context (tmdbId, season) for the backend to also create/sync a matching Seerr request.
+        const payload = {
+            tmdbId: interactiveContext && interactiveContext.tmdbId,
+            seasonNumber: currentView ? currentView.seasonNumber : null,
+            release: release
+        };
+
         return ApiClient.ajax({
             url: ApiClient.getUrl('SeerrFin/' + path),
             type: 'POST',
-            data: JSON.stringify(release),
+            data: JSON.stringify(payload),
             contentType: 'application/json',
             dataType: 'json'
         });
@@ -1402,7 +1413,8 @@ window.seerrFinLog = window.seerrFinLog || {
                     pushInteractiveView({
                         type: 'episode-releases',
                         episodeId: parseInt(btn.getAttribute('data-episode-id'), 10),
-                        episodeLabel: btn.getAttribute('data-episode-label')
+                        episodeLabel: btn.getAttribute('data-episode-label'),
+                        seasonNumber: seasonNumber
                     });
                 });
             });

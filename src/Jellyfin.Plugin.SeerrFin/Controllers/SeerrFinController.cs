@@ -9,6 +9,7 @@ using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Querying;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 
 namespace Jellyfin.Plugin.SeerrFin.Controllers;
@@ -28,6 +29,7 @@ public class SeerrFinController : ControllerBase
     private readonly JustWatchQualitiesService _justWatchQualitiesService;
     private readonly LetterboxdWatchlistService _letterboxdWatchlistService;
     private readonly LetterboxdBulkRequestService _letterboxdBulkRequestService;
+    private readonly ILogger<SeerrFinController> _logger;
 
     public SeerrFinController(
         JellyseerrDiscoveryService discoveryService,
@@ -40,7 +42,8 @@ public class SeerrFinController : ControllerBase
         TmdbBackdropService tmdbBackdropService,
         JustWatchQualitiesService justWatchQualitiesService,
         LetterboxdWatchlistService letterboxdWatchlistService,
-        LetterboxdBulkRequestService letterboxdBulkRequestService)
+        LetterboxdBulkRequestService letterboxdBulkRequestService,
+        ILogger<SeerrFinController> logger)
     {
         _discoveryService = discoveryService;
         _requestService = requestService;
@@ -53,6 +56,7 @@ public class SeerrFinController : ControllerBase
         _justWatchQualitiesService = justWatchQualitiesService;
         _letterboxdWatchlistService = letterboxdWatchlistService;
         _letterboxdBulkRequestService = letterboxdBulkRequestService;
+        _logger = logger;
     }
 
     private Guid GetUserId()
@@ -230,26 +234,99 @@ public class SeerrFinController : ControllerBase
 
     [HttpPost("interactive-search/movie/grab")]
     [Authorize(Roles = "Administrator")]
-    public async Task<IActionResult> GrabMovieInteractiveRelease(CancellationToken cancellationToken)
+    public async Task<IActionResult> GrabMovieInteractiveRelease(
+        [FromServices] IUserManager userManager,
+        CancellationToken cancellationToken)
     {
-        using StreamReader reader = new(Request.Body, Encoding.UTF8);
-        string body = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        (int? tmdbId, _, string releaseJson) = await ReadInteractiveGrabRequestAsync(cancellationToken).ConfigureAwait(false);
+
         (int statusCode, string responseBody) = await _interactiveSearchService
-            .GrabMovieReleaseAsync(body, cancellationToken)
+            .GrabMovieReleaseAsync(releaseJson, cancellationToken)
             .ConfigureAwait(false);
+
+        if (statusCode is >= 200 and < 300 && tmdbId.HasValue)
+        {
+            await SyncInteractiveGrabWithSeerrAsync(userManager, "movie", tmdbId.Value, null, cancellationToken).ConfigureAwait(false);
+        }
+
         return new ContentResult { StatusCode = statusCode, Content = responseBody, ContentType = "application/json" };
     }
 
     [HttpPost("interactive-search/series/grab")]
     [Authorize(Roles = "Administrator")]
-    public async Task<IActionResult> GrabSeriesInteractiveRelease(CancellationToken cancellationToken)
+    public async Task<IActionResult> GrabSeriesInteractiveRelease(
+        [FromServices] IUserManager userManager,
+        CancellationToken cancellationToken)
+    {
+        (int? tmdbId, int? seasonNumber, string releaseJson) = await ReadInteractiveGrabRequestAsync(cancellationToken).ConfigureAwait(false);
+
+        (int statusCode, string responseBody) = await _interactiveSearchService
+            .GrabSeriesReleaseAsync(releaseJson, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (statusCode is >= 200 and < 300 && tmdbId.HasValue)
+        {
+            await SyncInteractiveGrabWithSeerrAsync(userManager, "tv", tmdbId.Value, seasonNumber, cancellationToken).ConfigureAwait(false);
+        }
+
+        return new ContentResult { StatusCode = statusCode, Content = responseBody, ContentType = "application/json" };
+    }
+
+    private async Task<(int? TmdbId, int? SeasonNumber, string ReleaseJson)> ReadInteractiveGrabRequestAsync(CancellationToken cancellationToken)
     {
         using StreamReader reader = new(Request.Body, Encoding.UTF8);
         string body = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-        (int statusCode, string responseBody) = await _interactiveSearchService
-            .GrabSeriesReleaseAsync(body, cancellationToken)
-            .ConfigureAwait(false);
-        return new ContentResult { StatusCode = statusCode, Content = responseBody, ContentType = "application/json" };
+
+        try
+        {
+            JObject payload = JObject.Parse(body);
+            int? tmdbId = payload.Value<int?>("tmdbId");
+            int? seasonNumber = payload.Value<int?>("seasonNumber");
+            string releaseJson = (payload.Value<JObject>("release") ?? new JObject()).ToString(Newtonsoft.Json.Formatting.None);
+            return (tmdbId, seasonNumber, releaseJson);
+        }
+        catch (Newtonsoft.Json.JsonReaderException)
+        {
+            // Fall back to treating the whole body as the raw release object, in case a caller
+            // hasn't wrapped it with { tmdbId, seasonNumber, release }.
+            return (null, null, body);
+        }
+    }
+
+    /// <summary>
+    /// Grabbing a release directly through Radarr/Sonarr (as interactive search does) bypasses
+    /// Seerr entirely, so it would never show up in Seerr's own Downloads tab. Best-effort submit
+    /// a matching Seerr request afterward so it gets tracked the same as a normal request would.
+    /// A failure here must never fail the grab response - the download already started.
+    /// </summary>
+    private async Task SyncInteractiveGrabWithSeerrAsync(
+        IUserManager userManager,
+        string mediaType,
+        int tmdbId,
+        int? seasonNumber,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            string? username = GetUsername(userManager);
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                return;
+            }
+
+            DiscoverRequestPayload payload = new()
+            {
+                MediaType = mediaType,
+                MediaId = tmdbId,
+                Seasons = seasonNumber.HasValue ? new List<int> { seasonNumber.Value } : null
+            };
+
+            await _requestService.SubmitRequestAsync(username, payload, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SeerrFin • failed to sync interactive-search grab with Seerr for tmdbId {TmdbId}", tmdbId);
+        }
     }
 
     [HttpGet("Configuration")]
