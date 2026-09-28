@@ -972,75 +972,342 @@ window.seerrFinLog = window.seerrFinLog || {
         return Promise.resolve(fallback);
     }
 
+    const RELEASE_SORT_COLUMNS = [
+        { key: 'title', label: 'Title' },
+        { key: 'indexer', label: 'Indexer' },
+        { key: 'size', label: 'Size' },
+        { key: 'peers', label: 'Peers' },
+        { key: 'languages', label: 'Languages' },
+        { key: 'quality', label: 'Quality' },
+        { key: 'age', label: 'Age' }
+    ];
+
+    function getReleaseSortValue(release, key) {
+        switch (key) {
+            case 'title':
+                return (release.title || '').toLowerCase();
+            case 'indexer':
+                return (release.indexer || '').toLowerCase();
+            case 'size':
+                return release.size || 0;
+            case 'peers':
+                return release.seeders || 0;
+            case 'languages':
+                return (release.languages || []).map(function (l) { return l.name; }).join(', ').toLowerCase();
+            case 'quality':
+                return ((release.quality && release.quality.quality && release.quality.quality.name) || '').toLowerCase();
+            case 'age':
+                return release.ageHours != null ? release.ageHours : (release.age != null ? release.age * 24 : 0);
+            default:
+                return 0;
+        }
+    }
+
+    function sortReleases(releases, key, dir) {
+        const factor = dir === 'asc' ? 1 : -1;
+        return releases.slice().sort(function (a, b) {
+            const av = getReleaseSortValue(a, key);
+            const bv = getReleaseSortValue(b, key);
+            if (av < bv) return -1 * factor;
+            if (av > bv) return 1 * factor;
+            // Stable secondary sort so equal values (e.g. same peers count) don't jump around.
+            return (b.seeders || 0) - (a.seeders || 0);
+        });
+    }
+
+    // "Existing file meets cutoff"-style rejections are a property of the season/episode
+    // already having a file, not of any individual release - repeating that on every single
+    // row is noisy, so pull it out into one banner and leave only release-specific reasons inline.
+    function splitRejectionReasons(release) {
+        const reasons = release.rejections || [];
+        const existing = [];
+        const other = [];
+        reasons.forEach(function (reason) {
+            if (/existing file/i.test(reason)) {
+                existing.push(reason);
+            } else {
+                other.push(reason);
+            }
+        });
+        return { existing: existing, other: other };
+    }
+
+    const RELEASE_FILTER_CATEGORIES = [
+        { key: 'quality', label: 'Quality' },
+        { key: 'language', label: 'Languages' },
+        { key: 'indexer', label: 'Indexer' }
+    ];
+
+    function getReleaseQualityLabel(release) {
+        return (release.quality && release.quality.quality && release.quality.quality.name) || 'Unknown';
+    }
+
+    function getReleaseLanguageLabels(release) {
+        const names = (release.languages || []).map(function (l) { return l.name; }).filter(Boolean);
+        return names.length ? names : ['Unknown'];
+    }
+
+    // Separate filter option lists by category (Quality / Languages / Indexer), matching
+    // Sonarr/Radarr's own interactive search "Filter" menu layout.
+    function collectReleaseFilterOptions(releases) {
+        const counts = { quality: {}, language: {}, indexer: {} };
+
+        releases.forEach(function (release) {
+            counts.quality[getReleaseQualityLabel(release)] = (counts.quality[getReleaseQualityLabel(release)] || 0) + 1;
+            counts.indexer[release.indexer || 'Unknown'] = (counts.indexer[release.indexer || 'Unknown'] || 0) + 1;
+            getReleaseLanguageLabels(release).forEach(function (name) {
+                counts.language[name] = (counts.language[name] || 0) + 1;
+            });
+        });
+
+        function toSortedOptions(map) {
+            return Object.keys(map).sort().map(function (value) {
+                return { value: value, count: map[value] };
+            });
+        }
+
+        return {
+            quality: toSortedOptions(counts.quality),
+            language: toSortedOptions(counts.language),
+            indexer: toSortedOptions(counts.indexer)
+        };
+    }
+
+    function releaseMatchesFilters(release, filterState) {
+        if (filterState.quality.size && !filterState.quality.has(getReleaseQualityLabel(release))) {
+            return false;
+        }
+        if (filterState.indexer.size && !filterState.indexer.has(release.indexer || 'Unknown')) {
+            return false;
+        }
+        if (filterState.language.size) {
+            const hasMatch = getReleaseLanguageLabels(release).some(function (name) {
+                return filterState.language.has(name);
+            });
+            if (!hasMatch) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     function renderReleaseList(body, releases, grabKind) {
         if (!releases || !releases.length) {
             body.innerHTML = '<div class="bst-quality-empty">No releases found.</div>';
             return;
         }
 
-        const sorted = releases.slice().sort(function (a, b) {
-            return (b.seeders || 0) - (a.seeders || 0);
+        releases.forEach(function (release, i) {
+            release.__index = i;
         });
 
-        body.innerHTML = sorted.map(function (release, index) {
-            const quality = release.quality && release.quality.quality && release.quality.quality.name;
-            const size = formatReleaseBytes(release.size);
-            const age = formatReleaseAge(release);
-            const seeders = release.seeders != null ? release.seeders : null;
-            const leechers = release.leechers != null ? release.leechers : null;
-            const rejected = !!release.rejected;
-            const rejectionText = (release.rejections || []).join(', ');
-            const metaParts = [quality, size, age, release.indexer].filter(Boolean);
-            const seederPart = seeders != null ? (seeders + ' seeders' + (leechers != null ? '/' + leechers + ' peers' : '')) : '';
-            if (seederPart) {
-                metaParts.push(seederPart);
-            }
+        const existingFileReasons = [];
+        releases.forEach(function (release) {
+            splitRejectionReasons(release).existing.forEach(function (reason) {
+                if (existingFileReasons.indexOf(reason) === -1) {
+                    existingFileReasons.push(reason);
+                }
+            });
+        });
+
+        const sortState = { key: 'peers', dir: 'desc' };
+        const grabbedIndices = {};
+        const filterOptions = collectReleaseFilterOptions(releases);
+        const filterState = { quality: new Set(), language: new Set(), indexer: new Set() };
+        let filterPanelOpen = false;
+
+        function activeFilterCount() {
+            return filterState.quality.size + filterState.language.size + filterState.indexer.size;
+        }
+
+        function renderFilterPanel() {
+            const groupsHtml = RELEASE_FILTER_CATEGORIES.map(function (category) {
+                const options = filterOptions[category.key];
+                if (!options.length) {
+                    return '';
+                }
+                const optionsHtml = options.map(function (opt) {
+                    const checked = filterState[category.key].has(opt.value) ? ' checked' : '';
+                    return `
+                        <label class="bst-release-filter-option">
+                            <input type="checkbox" data-filter-category="${category.key}" value="${escapeHtml(opt.value)}"${checked} />
+                            <span>${escapeHtml(opt.value)}</span>
+                            <span class="bst-release-filter-count">${opt.count}</span>
+                        </label>`;
+                }).join('');
+                return `
+                    <div class="bst-release-filter-group">
+                        <div class="bst-release-filter-group-title">${escapeHtml(category.label)}</div>
+                        ${optionsHtml}
+                    </div>`;
+            }).join('');
 
             return `
-                <div class="bst-interactive-release${rejected ? ' bst-interactive-release-rejected' : ''}">
-                    <div class="bst-interactive-release-main">
-                        <span class="bst-interactive-release-title" title="${escapeHtml(release.title || '')}">${escapeHtml(release.title || 'Unknown release')}</span>
-                        <span class="bst-interactive-release-meta">${escapeHtml(metaParts.join(' • '))}</span>
-                        ${rejected && rejectionText ? `<span class="bst-interactive-release-rejection">${escapeHtml(rejectionText)}</span>` : ''}
-                    </div>
-                    <button type="button" class="bst-quality-option bst-interactive-grab-btn" data-index="${index}">
-                        ${rejected ? 'Download Anyway' : 'Download'}
-                    </button>
+                <div class="bst-release-filter-panel"${filterPanelOpen ? '' : ' hidden'}>
+                    ${groupsHtml}
+                    <button type="button" class="bst-release-filter-clear"${activeFilterCount() ? '' : ' disabled'}>Clear filters</button>
                 </div>`;
-        }).join('');
+        }
 
-        body.querySelectorAll('.bst-interactive-grab-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                const release = sorted[parseInt(btn.getAttribute('data-index'), 10)];
+        function bindToolbar() {
+            const toggleBtn = body.querySelector('.bst-release-filter-toggle');
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', function () {
+                    filterPanelOpen = !filterPanelOpen;
+                    draw();
+                });
+            }
 
-                // Rejected releases (e.g. "Existing file meets cutoff") are still valid to grab -
-                // it just means automatic search would have skipped it. Confirm since this can
-                // overwrite/replace a file already sitting in the library.
-                if (release.rejected) {
-                    const reasons = (release.rejections || []).join('\n• ');
-                    const confirmed = window.confirm(
-                        'This release was rejected by Sonarr/Radarr:\n\n• ' + reasons +
-                        '\n\nDownload it anyway? This may overwrite the existing file.'
-                    );
-                    if (!confirmed) {
-                        return;
+            body.querySelectorAll('.bst-release-filter-panel input[type="checkbox"]').forEach(function (checkbox) {
+                checkbox.addEventListener('change', function () {
+                    const category = checkbox.getAttribute('data-filter-category');
+                    if (checkbox.checked) {
+                        filterState[category].add(checkbox.value);
+                    } else {
+                        filterState[category].delete(checkbox.value);
                     }
-                }
-
-                btn.disabled = true;
-                btn.textContent = 'Grabbing…';
-                grabInteractiveRelease(release, grabKind).then(function () {
-                    btn.textContent = 'Sent to download client';
-                }).catch(function (err) {
-                    btn.disabled = false;
-                    btn.textContent = 'Download';
-                    log.error('grab release failed', err);
-                    parseAjaxErrorMessage(err, 'Failed to grab that release — search again.').then(function (message) {
-                renderInteractiveError(body, message);
-            });
+                    filterPanelOpen = true;
+                    draw();
                 });
             });
-        });
+
+            const clearBtn = body.querySelector('.bst-release-filter-clear');
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function () {
+                    filterState.quality.clear();
+                    filterState.language.clear();
+                    filterState.indexer.clear();
+                    filterPanelOpen = true;
+                    draw();
+                });
+            }
+        }
+
+        function draw() {
+            const filtered = releases.filter(function (release) {
+                return releaseMatchesFilters(release, filterState);
+            });
+            const sorted = sortReleases(filtered, sortState.key, sortState.dir);
+
+            const bannerHtml = existingFileReasons.length
+                ? `<div class="bst-release-banner">${existingFileReasons.map(escapeHtml).join('<br>')}</div>`
+                : '';
+
+            const filterCount = activeFilterCount();
+            const toolbarHtml = `
+                <div class="bst-release-toolbar">
+                    <span class="bst-release-count">${filtered.length} of ${releases.length} releases</span>
+                    <button type="button" class="bst-release-filter-toggle${filterCount ? ' bst-release-filter-toggle-active' : ''}">
+                        Filter${filterCount ? ' (' + filterCount + ')' : ''} ▾
+                    </button>
+                </div>
+                ${renderFilterPanel()}`;
+
+            const headerHtml = RELEASE_SORT_COLUMNS.map(function (col) {
+                const active = sortState.key === col.key;
+                const arrow = active ? (sortState.dir === 'asc' ? ' ▲' : ' ▼') : '';
+                return `<th class="bst-release-sortable${active ? ' bst-release-sort-active' : ''}" data-sort-key="${col.key}">${escapeHtml(col.label)}${arrow}</th>`;
+            }).join('');
+
+            if (!sorted.length) {
+                body.innerHTML = `${bannerHtml}${toolbarHtml}<div class="bst-quality-empty">No releases match the selected filters.</div>`;
+                bindToolbar();
+                return;
+            }
+
+            const rowsHtml = sorted.map(function (release) {
+                const quality = (release.quality && release.quality.quality && release.quality.quality.name) || '—';
+                const size = formatReleaseBytes(release.size) || '—';
+                const age = formatReleaseAge(release) || '—';
+                const seeders = release.seeders != null ? release.seeders : null;
+                const leechers = release.leechers != null ? release.leechers : null;
+                const peers = seeders != null ? (seeders + (leechers != null ? '/' + leechers : '')) : '—';
+                const languages = (release.languages || []).map(function (l) { return l.name; }).filter(Boolean).join(', ') || '—';
+                const rejected = !!release.rejected;
+                const otherReasonsText = splitRejectionReasons(release).other.join(', ');
+                const grabbed = !!grabbedIndices[release.__index];
+
+                return `
+                    <tr class="bst-release-row${rejected ? ' bst-release-row-rejected' : ''}">
+                        <td class="bst-release-title-cell">
+                            <span class="bst-release-title" title="${escapeHtml(release.title || '')}">${escapeHtml(release.title || 'Unknown release')}</span>
+                            ${rejected && otherReasonsText ? `<span class="bst-release-rejection">${escapeHtml(otherReasonsText)}</span>` : ''}
+                        </td>
+                        <td>${escapeHtml(release.indexer || '—')}</td>
+                        <td>${escapeHtml(size)}</td>
+                        <td>${escapeHtml(peers)}</td>
+                        <td>${escapeHtml(languages)}</td>
+                        <td>${escapeHtml(quality)}</td>
+                        <td>${escapeHtml(age)}</td>
+                        <td class="bst-release-action-cell">
+                            <button type="button" class="bst-quality-option bst-interactive-grab-btn" data-index="${release.__index}"${grabbed ? ' disabled' : ''}>
+                                ${grabbed ? 'Sent to download client' : (rejected ? 'Download Anyway' : 'Download')}
+                            </button>
+                        </td>
+                    </tr>`;
+            }).join('');
+
+            body.innerHTML = `
+                ${bannerHtml}
+                ${toolbarHtml}
+                <div class="bst-release-table-wrap">
+                    <table class="bst-release-table">
+                        <thead><tr>${headerHtml}<th></th></tr></thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                </div>`;
+
+            bindToolbar();
+
+            body.querySelectorAll('.bst-release-sortable').forEach(function (th) {
+                th.addEventListener('click', function () {
+                    const key = th.getAttribute('data-sort-key');
+                    if (sortState.key === key) {
+                        sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        sortState.key = key;
+                        sortState.dir = 'asc';
+                    }
+                    draw();
+                });
+            });
+
+            body.querySelectorAll('.bst-interactive-grab-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    const release = releases[parseInt(btn.getAttribute('data-index'), 10)];
+
+                    // Rejected releases (e.g. "Existing file meets cutoff") are still valid to
+                    // grab - it just means automatic search would have skipped it. Confirm since
+                    // this can overwrite/replace a file already sitting in the library.
+                    if (release.rejected) {
+                        const reasons = (release.rejections || []).join('\n• ');
+                        const confirmed = window.confirm(
+                            'This release was rejected by Sonarr/Radarr:\n\n• ' + reasons +
+                            '\n\nDownload it anyway? This may overwrite the existing file.'
+                        );
+                        if (!confirmed) {
+                            return;
+                        }
+                    }
+
+                    btn.disabled = true;
+                    btn.textContent = 'Grabbing…';
+                    grabInteractiveRelease(release, grabKind).then(function () {
+                        grabbedIndices[release.__index] = true;
+                        btn.textContent = 'Sent to download client';
+                    }).catch(function (err) {
+                        btn.disabled = false;
+                        btn.textContent = release.rejected ? 'Download Anyway' : 'Download';
+                        log.error('grab release failed', err);
+                        parseAjaxErrorMessage(err, 'Failed to grab that release — search again.').then(function (message) {
+                            renderInteractiveError(body, message);
+                        });
+                    });
+                });
+            });
+        }
+
+        draw();
     }
 
     function grabInteractiveRelease(release, grabKind) {
@@ -1177,7 +1444,13 @@ window.seerrFinLog = window.seerrFinLog || {
         const backBtn = activeInteractiveRoot.querySelector('.bst-interactive-back');
         const titleEl = activeInteractiveRoot.querySelector('.bst-interactive-title');
         const body = activeInteractiveRoot.querySelector('.bst-interactive-body');
+        const panelEl = activeInteractiveRoot.querySelector('.bst-interactive-search-panel');
         backBtn.hidden = interactiveViewStack.length <= 1;
+
+        const isReleasesView = view.type === 'movie-releases' || view.type === 'season-releases' || view.type === 'episode-releases';
+        if (panelEl) {
+            panelEl.classList.toggle('bst-interactive-search-panel--wide', isReleasesView);
+        }
 
         if (view.type === 'movie-releases') {
             titleEl.textContent = 'Interactive Search';
