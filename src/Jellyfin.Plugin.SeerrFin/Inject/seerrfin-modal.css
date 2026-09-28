@@ -460,6 +460,10 @@
     color: #787a7a;
 }
 
+.bst-btn-interactive-search[hidden] {
+    display: none;
+}
+
 .bst-details-layout {
     display: flex;
     flex-direction: row;
@@ -532,6 +536,10 @@
     font-weight: 500;
     line-height: 1.35;
     color: var(--bst-type-primary);
+}
+
+.bst-sidebar-lines[hidden] {
+    display: none;
 }
 
 .bst-sidebar-lines {
@@ -625,6 +633,10 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.bst-rating-badges[hidden] {
+    display: none;
+}
+
 .bst-rating-badge {
     display: inline-flex;
     align-items: center;
@@ -675,6 +687,10 @@
     animation: bst-scale-in 0.6s ease-out forwards;
     transform: scale(0);
     opacity: 0;
+}
+
+.bst-external-link[hidden] {
+    display: none;
 }
 
 .bst-external-link.tmdb {
@@ -1020,6 +1036,10 @@
     border: 1px solid var(--bst-border-primary);
     border-radius: 0.5rem;
     background: var(--bst-bg-secondary);
+}
+
+.bst-release-filter-panel[hidden] {
+    display: none;
 }
 
 .bst-release-filter-group {
