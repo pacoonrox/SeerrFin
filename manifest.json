@@ -10,6 +10,15 @@
     "repositoryUrl": "https://github.com/pacoonrox/SeerrFin",
     "versions": [
       {
+        "version": "1.8.4.5",
+        "changelog": "open interactive search to everyone, sync grabs to Downloads via Seerr's skipSearch",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/pacoonrox/SeerrFin/releases/download/1.8.4.5/Jellyfin.Plugin.SeerrFin_12.0.0.zip",
+        "checksum": "B8E8CCA3FB87882E5A828C3835BB3B80",
+        "timestamp": "2026-09-28T23:51:39.0000000Z",
+        "dependencies": []
+      },
+      {
         "version": "1.8.4.4",
         "changelog": "remove the Seerr Downloads-tab sync - it was the actual cause of the duplicate downloads",
         "targetAbi": "12.0.0.0",
