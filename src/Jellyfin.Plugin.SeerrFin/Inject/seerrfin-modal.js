@@ -1349,17 +1349,26 @@ window.seerrFinLog = window.seerrFinLog || {
                         }
                     }
 
-                    btn.disabled = true;
+                    // Lock every button in the table synchronously, right now, before any network
+                    // request goes out - not in the grab's success callback. JS event handlers
+                    // run to completion before the next queued click is dispatched, so this is
+                    // what actually closes the race: even a second tap a moment later can only
+                    // run after this handler has already disabled every button, no matter how
+                    // long the grab request itself takes. Waiting for the response first (what
+                    // shipped previously) left exactly that window open.
+                    body.querySelectorAll('.bst-interactive-grab-btn').forEach(function (otherBtn) {
+                        otherBtn.disabled = true;
+                    });
                     btn.textContent = 'Grabbing…';
+
                     grabInteractiveRelease(release, grabKind).then(function () {
                         grabbedIndices[release.__index] = true;
                         grabbedTitles.push(release.title || 'Unknown release');
-                        // Re-render the whole table, not just this button - every other row
-                        // needs to lock immediately, not only on the next unrelated re-render.
                         draw();
                     }).catch(function (err) {
-                        btn.disabled = false;
-                        btn.textContent = release.rejected ? 'Download Anyway' : 'Download';
+                        // Roll back the optimistic lock - draw() re-enables everything except
+                        // whatever grabbedTitles already genuinely covers.
+                        draw();
                         log.error('grab release failed', err);
                         parseAjaxErrorMessage(err, 'Failed to grab that release — search again.').then(function (message) {
                             renderInteractiveError(body, message);
