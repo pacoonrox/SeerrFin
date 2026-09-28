@@ -10,6 +10,15 @@
     "repositoryUrl": "https://github.com/pacoonrox/SeerrFin",
     "versions": [
       {
+        "version": "1.8.3.8",
+        "changelog": "sync interactive-search grabs into Seerr's Downloads tab",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/pacoonrox/SeerrFin/releases/download/1.8.3.8/Jellyfin.Plugin.SeerrFin_12.0.0.zip",
+        "checksum": "B0FAA6B34D0070B8900E7554758C9015",
+        "timestamp": "2026-09-28T08:52:17.0000000Z",
+        "dependencies": []
+      },
+      {
         "version": "1.8.3.7",
         "changelog": "filter panel and other hidden-by-default elements showing on load",
         "targetAbi": "12.0.0.0",
