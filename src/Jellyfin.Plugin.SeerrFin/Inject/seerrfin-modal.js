@@ -1132,6 +1132,7 @@ window.seerrFinLog = window.seerrFinLog || {
         const filterOptions = collectReleaseFilterOptions(releases);
         const filterState = { quality: new Set(), language: new Set(), indexer: new Set() };
         let filterPanelOpen = false;
+        let unlocked = false;
 
         function activeFilterCount() {
             return filterState.quality.size + filterState.language.size + filterState.indexer.size;
@@ -1167,6 +1168,21 @@ window.seerrFinLog = window.seerrFinLog || {
         }
 
         function bindToolbar() {
+            const unlockBtn = body.querySelector('.bst-release-unlock-btn');
+            if (unlockBtn) {
+                unlockBtn.addEventListener('click', function () {
+                    const confirmed = window.confirm(
+                        'This will let you grab additional releases for the same title, which can ' +
+                        'result in more than one download running at once. Continue?'
+                    );
+                    if (!confirmed) {
+                        return;
+                    }
+                    unlocked = true;
+                    draw();
+                });
+            }
+
             const toggleBtn = body.querySelector('.bst-release-filter-toggle');
             if (toggleBtn) {
                 toggleBtn.addEventListener('click', function () {
@@ -1206,8 +1222,13 @@ window.seerrFinLog = window.seerrFinLog || {
             });
             const sorted = sortReleases(filtered, sortState.key, sortState.dir);
 
-            const queueBannerHtml = activeDownloadTitles.length
-                ? `<div class="bst-release-banner bst-release-banner-info">Already downloading:<br>${activeDownloadTitles.map(escapeHtml).join('<br>')}</div>`
+            const queueBannerHtml = grabbedTitles.length
+                ? `<div class="bst-release-banner bst-release-banner-info">
+                        Already downloading:<br>${grabbedTitles.map(escapeHtml).join('<br>')}
+                        ${unlocked
+                            ? '<br><span class="bst-release-unlock-note">Downloads unlocked — every release below can be grabbed.</span>'
+                            : '<br><button type="button" class="bst-release-unlock-btn">Unlock — grab a different release too</button>'}
+                   </div>`
                 : '';
             const bannerHtml = queueBannerHtml + (existingFileReasons.length
                 ? `<div class="bst-release-banner">${existingFileReasons.map(escapeHtml).join('<br>')}</div>`
@@ -1246,6 +1267,18 @@ window.seerrFinLog = window.seerrFinLog || {
                 const rejected = !!release.rejected;
                 const otherReasonsText = splitRejectionReasons(release).other.join(', ');
                 const grabbed = !!grabbedIndices[release.__index];
+                // A native confirm() dialog is too easy to tap through by reflex, especially on
+                // mobile - once anything is already downloading for this exact target, every
+                // other button is hard-disabled instead of just warned. See "Unlock" in the
+                // banner for the rare case a second, deliberate grab is actually wanted.
+                const blocked = !unlocked && grabbedTitles.length > 0 && !grabbed;
+
+                let btnLabel = rejected ? 'Download Anyway' : 'Download';
+                if (grabbed) {
+                    btnLabel = 'Sent to download client';
+                } else if (blocked) {
+                    btnLabel = 'Blocked — already downloading';
+                }
 
                 return `
                     <tr class="bst-release-row${rejected ? ' bst-release-row-rejected' : ''}">
@@ -1260,8 +1293,8 @@ window.seerrFinLog = window.seerrFinLog || {
                         <td>${escapeHtml(quality)}</td>
                         <td>${escapeHtml(age)}</td>
                         <td class="bst-release-action-cell">
-                            <button type="button" class="bst-quality-option bst-interactive-grab-btn" data-index="${release.__index}"${grabbed ? ' disabled' : ''}>
-                                ${grabbed ? 'Sent to download client' : (rejected ? 'Download Anyway' : 'Download')}
+                            <button type="button" class="bst-quality-option bst-interactive-grab-btn" data-index="${release.__index}"${(grabbed || blocked) ? ' disabled' : ''}>
+                                ${escapeHtml(btnLabel)}
                             </button>
                         </td>
                     </tr>`;
@@ -1295,31 +1328,22 @@ window.seerrFinLog = window.seerrFinLog || {
             body.querySelectorAll('.bst-interactive-grab-btn').forEach(function (btn) {
                 btn.addEventListener('click', function () {
                     const release = releases[parseInt(btn.getAttribute('data-index'), 10)];
-                    const warnings = [];
+
+                    // Disabled/blocked buttons don't fire clicks, but double-check server-side
+                    // state hasn't changed under us (e.g. a stale render) before grabbing anyway.
+                    if (btn.disabled) {
+                        return;
+                    }
 
                     // Rejected releases (e.g. "Existing file meets cutoff") are still valid to
-                    // grab - it just means automatic search would have skipped it.
+                    // grab - it just means automatic search would have skipped it. This is the
+                    // only remaining confirmation; duplicate grabs are hard-blocked instead of
+                    // just warned (see "blocked" above and the Unlock control in the banner).
                     if (release.rejected) {
-                        warnings.push(
+                        const confirmed = window.confirm(
                             'This release was rejected by Sonarr/Radarr:\n• ' + (release.rejections || []).join('\n• ') +
-                            '\nDownloading it anyway may overwrite the existing file.'
+                            '\n\nDownload it anyway? This may overwrite the existing file.'
                         );
-                    }
-
-                    // Grabbing a second release for the same movie/episode is almost always a
-                    // mis-click, not intentional - make sure that's really what's wanted before
-                    // it downloads a duplicate. grabbedTitles covers both what Radarr/Sonarr
-                    // already had queued before this search was opened (any device) and anything
-                    // grabbed earlier in this session.
-                    if (grabbedTitles.length) {
-                        warnings.push(
-                            'Already downloading:\n• ' + grabbedTitles.join('\n• ') +
-                            '\nGrabbing another release here will download a duplicate.'
-                        );
-                    }
-
-                    if (warnings.length) {
-                        const confirmed = window.confirm(warnings.join('\n\n') + '\n\nDownload this release anyway?');
                         if (!confirmed) {
                             return;
                         }
@@ -1330,7 +1354,9 @@ window.seerrFinLog = window.seerrFinLog || {
                     grabInteractiveRelease(release, grabKind).then(function () {
                         grabbedIndices[release.__index] = true;
                         grabbedTitles.push(release.title || 'Unknown release');
-                        btn.textContent = 'Sent to download client';
+                        // Re-render the whole table, not just this button - every other row
+                        // needs to lock immediately, not only on the next unrelated re-render.
+                        draw();
                     }).catch(function (err) {
                         btn.disabled = false;
                         btn.textContent = release.rejected ? 'Download Anyway' : 'Download';
