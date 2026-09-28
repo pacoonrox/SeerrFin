@@ -973,8 +973,8 @@
     background: var(--bst-bg-secondary);
 }
 
-.bst-interactive-release-rejected {
-    opacity: 0.55;
+.bst-interactive-release-rejected .bst-interactive-release-main {
+    opacity: 0.7;
 }
 
 .bst-interactive-release-main {
