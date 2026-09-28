@@ -234,15 +234,25 @@ public sealed class ServarrProgressService
                     }
                 }
 
-                foreach (ServarrRequestContext context in contexts.Where(c => !string.Equals(c.Type, "tv", StringComparison.OrdinalIgnoreCase) && !moviesByTmdbId.ContainsKey(c.TmdbId)))
+                List<ServarrRequestContext> unmatchedMovieContexts = contexts
+                    .Where(c => !string.Equals(c.Type, "tv", StringComparison.OrdinalIgnoreCase)
+                        && !moviesByTmdbId.ContainsKey(c.TmdbId)
+                        && c.ExternalServiceId.HasValue)
+                    .ToList();
+
+                if (unmatchedMovieContexts.Count > 0)
                 {
-                    if (context.ExternalServiceId.HasValue)
+                    // Fetch these one request at a time and every poll (every AutoRefreshIntervalSeconds)
+                    // stalls waiting on each round trip in turn - run them concurrently instead.
+                    JObject?[] fetchedMovies = await Task.WhenAll(unmatchedMovieContexts.Select(c =>
+                            GetJsonObjectAsync(client, $"movie/{c.ExternalServiceId!.Value}", cancellationToken)))
+                        .ConfigureAwait(false);
+
+                    for (int i = 0; i < unmatchedMovieContexts.Count; i++)
                     {
-                        JObject? movie = await GetJsonObjectAsync(client, $"movie/{context.ExternalServiceId.Value}", cancellationToken)
-                            .ConfigureAwait(false);
-                        if (movie != null)
+                        if (fetchedMovies[i] != null)
                         {
-                            moviesByTmdbId[context.TmdbId] = movie;
+                            moviesByTmdbId[unmatchedMovieContexts[i].TmdbId] = fetchedMovies[i]!;
                         }
                     }
                 }
@@ -292,6 +302,8 @@ public sealed class ServarrProgressService
             if (tmdbIds.Count > 0)
             {
                 JArray? seriesList = await GetJsonArrayAsync(client, "series", cancellationToken).ConfigureAwait(false);
+                List<int> seriesIdsNeedingEpisodes = new();
+
                 if (seriesList != null)
                 {
                     foreach (JObject series in seriesList.OfType<JObject>())
@@ -304,45 +316,61 @@ public sealed class ServarrProgressService
 
                         seriesByTmdbId[tmdbId.Value] = series;
                         int? seriesId = series.Value<int?>("id");
-                        if (!seriesId.HasValue)
+                        if (seriesId.HasValue)
                         {
-                            continue;
-                        }
-
-                        JArray? episodes = await GetJsonArrayAsync(client, $"episode?seriesId={seriesId.Value}", cancellationToken)
-                            .ConfigureAwait(false);
-                        if (episodes != null)
-                        {
-                            episodesBySeriesId[seriesId.Value] = episodes.OfType<JObject>().ToList();
+                            seriesIdsNeedingEpisodes.Add(seriesId.Value);
                         }
                     }
                 }
 
-                foreach (ServarrRequestContext context in contexts.Where(c =>
-                             string.Equals(c.Type, "tv", StringComparison.OrdinalIgnoreCase)
-                             && !seriesByTmdbId.ContainsKey(c.TmdbId)))
+                // A handful of requests reference a series Sonarr's bulk list didn't return
+                // (e.g. not yet indexed) - fetch those directly, but still concurrently.
+                List<ServarrRequestContext> unmatchedContexts = contexts
+                    .Where(c => string.Equals(c.Type, "tv", StringComparison.OrdinalIgnoreCase)
+                        && !seriesByTmdbId.ContainsKey(c.TmdbId)
+                        && c.ExternalServiceId.HasValue)
+                    .ToList();
+
+                if (unmatchedContexts.Count > 0)
                 {
-                    if (context.ExternalServiceId.HasValue)
+                    JObject?[] fetchedSeries = await Task.WhenAll(unmatchedContexts.Select(c =>
+                            GetJsonObjectAsync(client, $"series/{c.ExternalServiceId!.Value}", cancellationToken)))
+                        .ConfigureAwait(false);
+
+                    for (int i = 0; i < unmatchedContexts.Count; i++)
                     {
-                        JObject? series = await GetJsonObjectAsync(client, $"series/{context.ExternalServiceId.Value}", cancellationToken)
-                            .ConfigureAwait(false);
+                        JObject? series = fetchedSeries[i];
                         if (series == null)
                         {
                             continue;
                         }
 
-                        seriesByTmdbId[context.TmdbId] = series;
+                        seriesByTmdbId[unmatchedContexts[i].TmdbId] = series;
                         int? seriesId = series.Value<int?>("id");
-                        if (!seriesId.HasValue)
+                        if (seriesId.HasValue)
                         {
-                            continue;
+                            seriesIdsNeedingEpisodes.Add(seriesId.Value);
                         }
+                    }
+                }
 
-                        JArray? episodes = await GetJsonArrayAsync(client, $"episode?seriesId={seriesId.Value}", cancellationToken)
-                            .ConfigureAwait(false);
-                        if (episodes != null)
+                // This used to fetch each series' episode list one request at a time inside the
+                // loop above, so every progress poll stalled for (round trip * requested show
+                // count) before the UI updated. Fetching them all concurrently instead turns
+                // that into roughly one round trip's worth of wait regardless of how many shows
+                // are being tracked.
+                List<int> distinctSeriesIds = seriesIdsNeedingEpisodes.Distinct().ToList();
+                if (distinctSeriesIds.Count > 0)
+                {
+                    JArray?[] episodeResults = await Task.WhenAll(distinctSeriesIds.Select(id =>
+                            GetJsonArrayAsync(client, $"episode?seriesId={id}", cancellationToken)))
+                        .ConfigureAwait(false);
+
+                    for (int i = 0; i < distinctSeriesIds.Count; i++)
+                    {
+                        if (episodeResults[i] != null)
                         {
-                            episodesBySeriesId[seriesId.Value] = episodes.OfType<JObject>().ToList();
+                            episodesBySeriesId[distinctSeriesIds[i]] = episodeResults[i]!.OfType<JObject>().ToList();
                         }
                     }
                 }
