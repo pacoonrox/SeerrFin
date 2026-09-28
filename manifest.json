@@ -10,6 +10,15 @@
     "repositoryUrl": "https://github.com/pacoonrox/SeerrFin",
     "versions": [
       {
+        "version": "1.8.3.3",
+        "changelog": "stop CDN/proxy from caching injected JS/CSS so new tabs show up without a hard refresh",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/pacoonrox/SeerrFin/releases/download/1.8.3.3/Jellyfin.Plugin.SeerrFin_12.0.0.zip",
+        "checksum": "8886842551D6C9ED6D4B9D1778039EBE",
+        "timestamp": "2026-09-28T07:44:35.0000000Z",
+        "dependencies": []
+      },
+      {
         "version": "1.8.3.2",
         "changelog": "de-duplicate discover row items across paginated fetches",
         "targetAbi": "12.0.0.0",
