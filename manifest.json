@@ -10,6 +10,15 @@
     "repositoryUrl": "https://github.com/pacoonrox/SeerrFin",
     "versions": [
       {
+        "version": "1.8.4.0",
+        "changelog": "check Radarr/Sonarr's live queue, not just in-page session, before a second grab",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/pacoonrox/SeerrFin/releases/download/1.8.4.0/Jellyfin.Plugin.SeerrFin_12.0.0.zip",
+        "checksum": "9DC07401EB1169BC4D50BDC3241EA045",
+        "timestamp": "2026-09-28T08:59:44.0000000Z",
+        "dependencies": []
+      },
+      {
         "version": "1.8.3.9",
         "changelog": "confirm before grabbing a second release for the same title",
         "targetAbi": "12.0.0.0",
