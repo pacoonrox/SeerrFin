@@ -234,53 +234,26 @@ public class SeerrFinController : ControllerBase
 
     [HttpPost("interactive-search/movie/grab")]
     [Authorize(Roles = "Administrator")]
-    public async Task<IActionResult> GrabMovieInteractiveRelease(
-        [FromServices] IUserManager userManager,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> GrabMovieInteractiveRelease(CancellationToken cancellationToken)
     {
-        (int? tmdbId, _, string releaseJson) = await ReadInteractiveGrabRequestAsync(cancellationToken).ConfigureAwait(false);
+        (_, _, string releaseJson) = await ReadInteractiveGrabRequestAsync(cancellationToken).ConfigureAwait(false);
 
         (int statusCode, string responseBody) = await _interactiveSearchService
             .GrabMovieReleaseAsync(releaseJson, cancellationToken)
             .ConfigureAwait(false);
-
-        if (statusCode is >= 200 and < 300 && tmdbId.HasValue)
-        {
-            // Fire-and-forget: the admin's UI locks every other release button as soon as this
-            // response comes back, so awaiting a whole extra round trip to Seerr here (resolving
-            // its user, then POSTing a request) left that window open long enough for a second
-            // grab to slip through before the lock applied. The actual download already
-            // succeeded either way, so this response shouldn't wait on best-effort bookkeeping.
-            string? username = GetUsername(userManager);
-            if (!string.IsNullOrWhiteSpace(username))
-            {
-                _ = SyncInteractiveGrabWithSeerrAsync(username, "movie", tmdbId.Value, null);
-            }
-        }
 
         return new ContentResult { StatusCode = statusCode, Content = responseBody, ContentType = "application/json" };
     }
 
     [HttpPost("interactive-search/series/grab")]
     [Authorize(Roles = "Administrator")]
-    public async Task<IActionResult> GrabSeriesInteractiveRelease(
-        [FromServices] IUserManager userManager,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> GrabSeriesInteractiveRelease(CancellationToken cancellationToken)
     {
-        (int? tmdbId, int? seasonNumber, string releaseJson) = await ReadInteractiveGrabRequestAsync(cancellationToken).ConfigureAwait(false);
+        (_, _, string releaseJson) = await ReadInteractiveGrabRequestAsync(cancellationToken).ConfigureAwait(false);
 
         (int statusCode, string responseBody) = await _interactiveSearchService
             .GrabSeriesReleaseAsync(releaseJson, cancellationToken)
             .ConfigureAwait(false);
-
-        if (statusCode is >= 200 and < 300 && tmdbId.HasValue)
-        {
-            string? username = GetUsername(userManager);
-            if (!string.IsNullOrWhiteSpace(username))
-            {
-                _ = SyncInteractiveGrabWithSeerrAsync(username, "tv", tmdbId.Value, seasonNumber);
-            }
-        }
 
         return new ContentResult { StatusCode = statusCode, Content = responseBody, ContentType = "application/json" };
     }
@@ -303,37 +276,6 @@ public class SeerrFinController : ControllerBase
             // Fall back to treating the whole body as the raw release object, in case a caller
             // hasn't wrapped it with { tmdbId, seasonNumber, release }.
             return (null, null, body);
-        }
-    }
-
-    /// <summary>
-    /// Grabbing a release directly through Radarr/Sonarr (as interactive search does) bypasses
-    /// Seerr entirely, so it would never show up in Seerr's own Downloads tab. Best-effort submit
-    /// a matching Seerr request afterward so it gets tracked the same as a normal request would.
-    /// Deliberately not awaited by the caller (see the fire-and-forget comment at each call site)
-    /// and takes a plain username rather than IUserManager, so it never touches anything tied to
-    /// the HTTP request's lifetime - this keeps running after the response has already been sent.
-    /// </summary>
-    private async Task SyncInteractiveGrabWithSeerrAsync(
-        string username,
-        string mediaType,
-        int tmdbId,
-        int? seasonNumber)
-    {
-        try
-        {
-            DiscoverRequestPayload payload = new()
-            {
-                MediaType = mediaType,
-                MediaId = tmdbId,
-                Seasons = seasonNumber.HasValue ? new List<int> { seasonNumber.Value } : null
-            };
-
-            await _requestService.SubmitRequestAsync(username, payload, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "SeerrFin • failed to sync interactive-search grab with Seerr for tmdbId {TmdbId}", tmdbId);
         }
     }
 
