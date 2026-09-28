@@ -38,8 +38,15 @@ public sealed class ServarrInteractiveSearchService
             }
 
             int movieId = movie.Value<int>("id");
+            JArray queue = await GetQueueRecordsAsync(client, "movieIds", movieId, cancellationToken).ConfigureAwait(false);
             JArray? releases = await GetJsonArrayAsync(client, $"release?movieId={movieId}", cancellationToken).ConfigureAwait(false);
-            return (200, (releases ?? new JArray()).ToString(Formatting.None));
+
+            JObject result = new()
+            {
+                ["queue"] = BuildQueueSummary(queue),
+                ["releases"] = releases ?? new JArray()
+            };
+            return (200, result.ToString(Formatting.None));
         }
         catch (Exception ex)
         {
@@ -146,8 +153,16 @@ public sealed class ServarrInteractiveSearchService
             }
 
             int seriesId = series.Value<int>("id");
+            JArray queue = await GetQueueRecordsAsync(client, "seriesIds", seriesId, cancellationToken).ConfigureAwait(false);
+            JArray seasonQueue = new(queue.OfType<JObject>().Where(q => q.Value<int?>("seasonNumber") == seasonNumber));
             JArray? releases = await GetJsonArrayAsync(client, $"release?seriesId={seriesId}&seasonNumber={seasonNumber}", cancellationToken).ConfigureAwait(false);
-            return (200, (releases ?? new JArray()).ToString(Formatting.None));
+
+            JObject result = new()
+            {
+                ["queue"] = BuildQueueSummary(seasonQueue),
+                ["releases"] = releases ?? new JArray()
+            };
+            return (200, result.ToString(Formatting.None));
         }
         catch (Exception ex)
         {
@@ -167,8 +182,24 @@ public sealed class ServarrInteractiveSearchService
         try
         {
             using HttpClient client = CreateClient(config.SonarrUrl!, config.SonarrApiKey!);
+
+            JArray queue = new();
+            JObject? episode = await GetJsonObjectAsync(client, $"episode/{episodeId}", cancellationToken).ConfigureAwait(false);
+            int? seriesId = episode?.Value<int?>("seriesId");
+            if (seriesId.HasValue)
+            {
+                JArray seriesQueue = await GetQueueRecordsAsync(client, "seriesIds", seriesId.Value, cancellationToken).ConfigureAwait(false);
+                queue = new JArray(seriesQueue.OfType<JObject>().Where(q => q.Value<int?>("episodeId") == episodeId));
+            }
+
             JArray? releases = await GetJsonArrayAsync(client, $"release?episodeId={episodeId}", cancellationToken).ConfigureAwait(false);
-            return (200, (releases ?? new JArray()).ToString(Formatting.None));
+
+            JObject result = new()
+            {
+                ["queue"] = BuildQueueSummary(queue),
+                ["releases"] = releases ?? new JArray()
+            };
+            return (200, result.ToString(Formatting.None));
         }
         catch (Exception ex)
         {
@@ -332,6 +363,44 @@ public sealed class ServarrInteractiveSearchService
     {
         JArray? folders = await GetJsonArrayAsync(client, "rootfolder", cancellationToken).ConfigureAwait(false);
         return folders?.OfType<JObject>().FirstOrDefault()?.Value<string>("path");
+    }
+
+    /// <summary>
+    /// Radarr/Sonarr's queue endpoint is paged ({ records: [...] }, not a bare array) and only
+    /// filters by movieId/seriesId - a large pageSize keeps this to one request per check.
+    /// </summary>
+    private static async Task<JArray> GetQueueRecordsAsync(HttpClient client, string idParamName, int id, CancellationToken cancellationToken)
+    {
+        JObject? paged = await GetJsonObjectAsync(
+            client,
+            $"queue?{idParamName}={id}&pageSize=250&includeUnknownSeriesItems=false&includeUnknownMovieItems=false",
+            cancellationToken).ConfigureAwait(false);
+        return paged?.Value<JArray>("records") ?? new JArray();
+    }
+
+    /// <summary>
+    /// Trims a raw queue record list down to just what the UI needs to warn "this is already
+    /// downloading" before letting an admin grab a second, competing release for the same title.
+    /// </summary>
+    private static JArray BuildQueueSummary(JArray queueRecords)
+    {
+        JArray summary = new();
+        foreach (JObject record in queueRecords.OfType<JObject>())
+        {
+            decimal size = record.Value<decimal?>("size") ?? 0;
+            decimal sizeLeft = record.Value<decimal?>("sizeleft") ?? 0;
+            int percent = size > 0 ? (int)Math.Round((1 - (sizeLeft / size)) * 100) : 0;
+
+            summary.Add(new JObject
+            {
+                ["title"] = record.Value<string>("title"),
+                ["status"] = record.Value<string>("status"),
+                ["percent"] = percent,
+                ["downloadClient"] = record.Value<string>("downloadClient")
+            });
+        }
+
+        return summary;
     }
 
     private static async Task<JObject?> GetJsonObjectAsync(HttpClient client, string path, CancellationToken cancellationToken)

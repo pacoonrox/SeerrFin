@@ -1091,9 +1091,23 @@ window.seerrFinLog = window.seerrFinLog || {
         return true;
     }
 
-    function renderReleaseList(body, releases, grabKind) {
-        if (!releases || !releases.length) {
-            body.innerHTML = '<div class="bst-quality-empty">No releases found.</div>';
+    function renderReleaseList(body, releases, grabKind, initialQueue) {
+        releases = releases || [];
+
+        // What Radarr/Sonarr already has actively downloading for exactly this movie/season/episode,
+        // fetched fresh from the server - not just what happened earlier in this browser session.
+        // Combined with grabbedTitles (below) this is what actually stops a second, competing
+        // release from being grabbed by accident, on any device.
+        const activeDownloadTitles = (initialQueue || []).map(function (item) {
+            const pct = item.percent != null ? ' (' + item.percent + '%)' : '';
+            return (item.title || 'Unknown release') + pct;
+        });
+
+        if (!releases.length) {
+            const banner = activeDownloadTitles.length
+                ? `<div class="bst-release-banner bst-release-banner-info">Already downloading:<br>${activeDownloadTitles.map(escapeHtml).join('<br>')}</div>`
+                : '';
+            body.innerHTML = `${banner}<div class="bst-quality-empty">No releases found.</div>`;
             return;
         }
 
@@ -1112,7 +1126,9 @@ window.seerrFinLog = window.seerrFinLog || {
 
         const sortState = { key: 'peers', dir: 'desc' };
         const grabbedIndices = {};
-        const grabbedTitles = [];
+        // Seeded with whatever's already downloading server-side, then appended to as this
+        // session grabs more - the combination is what every subsequent grab is checked against.
+        const grabbedTitles = activeDownloadTitles.slice();
         const filterOptions = collectReleaseFilterOptions(releases);
         const filterState = { quality: new Set(), language: new Set(), indexer: new Set() };
         let filterPanelOpen = false;
@@ -1190,9 +1206,12 @@ window.seerrFinLog = window.seerrFinLog || {
             });
             const sorted = sortReleases(filtered, sortState.key, sortState.dir);
 
-            const bannerHtml = existingFileReasons.length
-                ? `<div class="bst-release-banner">${existingFileReasons.map(escapeHtml).join('<br>')}</div>`
+            const queueBannerHtml = activeDownloadTitles.length
+                ? `<div class="bst-release-banner bst-release-banner-info">Already downloading:<br>${activeDownloadTitles.map(escapeHtml).join('<br>')}</div>`
                 : '';
+            const bannerHtml = queueBannerHtml + (existingFileReasons.length
+                ? `<div class="bst-release-banner">${existingFileReasons.map(escapeHtml).join('<br>')}</div>`
+                : '');
 
             const filterCount = activeFilterCount();
             const toolbarHtml = `
@@ -1289,10 +1308,12 @@ window.seerrFinLog = window.seerrFinLog || {
 
                     // Grabbing a second release for the same movie/episode is almost always a
                     // mis-click, not intentional - make sure that's really what's wanted before
-                    // it downloads a duplicate.
+                    // it downloads a duplicate. grabbedTitles covers both what Radarr/Sonarr
+                    // already had queued before this search was opened (any device) and anything
+                    // grabbed earlier in this session.
                     if (grabbedTitles.length) {
                         warnings.push(
-                            'You already grabbed:\n• ' + grabbedTitles.join('\n• ') +
+                            'Already downloading:\n• ' + grabbedTitles.join('\n• ') +
                             '\nGrabbing another release here will download a duplicate.'
                         );
                     }
@@ -1349,8 +1370,8 @@ window.seerrFinLog = window.seerrFinLog || {
 
     function loadMovieReleases(body) {
         body.innerHTML = '<div class="bst-quality-loading">Searching indexers…</div>';
-        fetchInteractiveJson('interactive-search/movie/' + interactiveContext.tmdbId + '/releases').then(function (releases) {
-            renderReleaseList(body, releases, 'movie');
+        fetchInteractiveJson('interactive-search/movie/' + interactiveContext.tmdbId + '/releases').then(function (result) {
+            renderReleaseList(body, result.releases, 'movie', result.queue);
         }).catch(function (err) {
             parseAjaxErrorMessage(err, 'Failed to search Radarr.').then(function (message) {
                 renderInteractiveError(body, message);
@@ -1442,8 +1463,8 @@ window.seerrFinLog = window.seerrFinLog || {
 
     function loadSeasonReleases(body, seasonNumber) {
         body.innerHTML = '<div class="bst-quality-loading">Searching indexers…</div>';
-        fetchInteractiveJson('interactive-search/series/' + interactiveContext.tmdbId + '/season/' + seasonNumber + '/releases').then(function (releases) {
-            renderReleaseList(body, releases, 'series');
+        fetchInteractiveJson('interactive-search/series/' + interactiveContext.tmdbId + '/season/' + seasonNumber + '/releases').then(function (result) {
+            renderReleaseList(body, result.releases, 'series', result.queue);
         }).catch(function (err) {
             parseAjaxErrorMessage(err, 'Failed to search Sonarr.').then(function (message) {
                 renderInteractiveError(body, message);
@@ -1453,8 +1474,8 @@ window.seerrFinLog = window.seerrFinLog || {
 
     function loadEpisodeReleases(body, episodeId) {
         body.innerHTML = '<div class="bst-quality-loading">Searching indexers…</div>';
-        fetchInteractiveJson('interactive-search/episode/' + episodeId + '/releases').then(function (releases) {
-            renderReleaseList(body, releases, 'series');
+        fetchInteractiveJson('interactive-search/episode/' + episodeId + '/releases').then(function (result) {
+            renderReleaseList(body, result.releases, 'series', result.queue);
         }).catch(function (err) {
             parseAjaxErrorMessage(err, 'Failed to search Sonarr.').then(function (message) {
                 renderInteractiveError(body, message);

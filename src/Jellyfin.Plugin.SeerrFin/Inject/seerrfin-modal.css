@@ -1109,6 +1109,12 @@
     line-height: 1.4;
 }
 
+.bst-release-banner-info {
+    border-color: rgba(0, 164, 220, 0.4);
+    background: rgba(0, 164, 220, 0.1);
+    color: #7ec8e3;
+}
+
 .bst-release-table-wrap {
     overflow-x: auto;
     padding: 0 1rem;
