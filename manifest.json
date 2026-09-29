@@ -10,6 +10,15 @@
     "repositoryUrl": "https://github.com/pacoonrox/SeerrFin",
     "versions": [
       {
+        "version": "1.8.4.6",
+        "changelog": "pool HttpClient, use real async I/O, and cache upstream pages for search/discover",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/pacoonrox/SeerrFin/releases/download/1.8.4.6/Jellyfin.Plugin.SeerrFin_12.0.0.zip",
+        "checksum": "411B592780072DD4339DAAF93C2B7E6F",
+        "timestamp": "2026-09-29T00:33:09.0000000Z",
+        "dependencies": []
+      },
+      {
         "version": "1.8.4.5",
         "changelog": "open interactive search to everyone, sync grabs to Downloads via Seerr's skipSearch",
         "targetAbi": "12.0.0.0",
