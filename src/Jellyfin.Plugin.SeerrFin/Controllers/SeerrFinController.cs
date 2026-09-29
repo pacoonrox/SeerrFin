@@ -481,160 +481,177 @@ public class SeerrFinController : ControllerBase
 
     [HttpGet("discover/movies/trending")]
     [Authorize]
-    public ActionResult<QueryResult<BaseItemDto>> MoviesTrending(
+    public Task<ActionResult<QueryResult<BaseItemDto>>> MoviesTrending(
         [FromServices] IUserManager userManager,
         [FromQuery] int startIndex = 0,
-        [FromQuery] int? limit = null) =>
-        DiscoverRow(userManager, "/api/v1/discover/trending", "movie", startIndex, limit);
+        [FromQuery] int? limit = null,
+        CancellationToken cancellationToken = default) =>
+        DiscoverRow(userManager, "/api/v1/discover/trending", "movie", startIndex, limit, cancellationToken);
 
     [HttpGet("discover/movies/popular")]
     [Authorize]
-    public ActionResult<QueryResult<BaseItemDto>> MoviesPopular(
+    public Task<ActionResult<QueryResult<BaseItemDto>>> MoviesPopular(
         [FromServices] IUserManager userManager,
         [FromQuery] int startIndex = 0,
-        [FromQuery] int? limit = null) =>
-        DiscoverRow(userManager, "/api/v1/discover/movies?sortBy=popularity.desc", "movie", startIndex, limit);
+        [FromQuery] int? limit = null,
+        CancellationToken cancellationToken = default) =>
+        DiscoverRow(userManager, "/api/v1/discover/movies?sortBy=popularity.desc", "movie", startIndex, limit, cancellationToken);
 
     [HttpGet("discover/movies/top-rated")]
     [Authorize]
-    public ActionResult<QueryResult<BaseItemDto>> MoviesTopRated(
+    public Task<ActionResult<QueryResult<BaseItemDto>>> MoviesTopRated(
         [FromServices] IUserManager userManager,
         [FromQuery] int startIndex = 0,
-        [FromQuery] int? limit = null) =>
-        DiscoverRow(userManager, "/api/v1/discover/movies?sortBy=vote_average.desc&voteCountGte=200", "movie", startIndex, limit);
+        [FromQuery] int? limit = null,
+        CancellationToken cancellationToken = default) =>
+        DiscoverRow(userManager, "/api/v1/discover/movies?sortBy=vote_average.desc&voteCountGte=200", "movie", startIndex, limit, cancellationToken);
 
     [HttpGet("discover/movies/upcoming")]
     [Authorize]
-    public ActionResult<QueryResult<BaseItemDto>> MoviesUpcoming(
+    public Task<ActionResult<QueryResult<BaseItemDto>>> MoviesUpcoming(
         [FromServices] IUserManager userManager,
         [FromQuery] int startIndex = 0,
-        [FromQuery] int? limit = null) =>
-        DiscoverRow(userManager, "/api/v1/discover/movies/upcoming", "movie", startIndex, limit);
+        [FromQuery] int? limit = null,
+        CancellationToken cancellationToken = default) =>
+        DiscoverRow(userManager, "/api/v1/discover/movies/upcoming", "movie", startIndex, limit, cancellationToken);
 
     [HttpGet("discover/tv/trending")]
     [Authorize]
-    public ActionResult<QueryResult<BaseItemDto>> TvTrending(
+    public Task<ActionResult<QueryResult<BaseItemDto>>> TvTrending(
         [FromServices] IUserManager userManager,
         [FromQuery] int startIndex = 0,
-        [FromQuery] int? limit = null) =>
-        DiscoverRow(userManager, "/api/v1/discover/trending", "tv", startIndex, limit);
+        [FromQuery] int? limit = null,
+        CancellationToken cancellationToken = default) =>
+        DiscoverRow(userManager, "/api/v1/discover/trending", "tv", startIndex, limit, cancellationToken);
 
     [HttpGet("discover/tv/popular")]
     [Authorize]
-    public ActionResult<QueryResult<BaseItemDto>> TvPopular(
+    public Task<ActionResult<QueryResult<BaseItemDto>>> TvPopular(
         [FromServices] IUserManager userManager,
         [FromQuery] int startIndex = 0,
-        [FromQuery] int? limit = null) =>
-        DiscoverRow(userManager, "/api/v1/discover/tv?sortBy=popularity.desc", "tv", startIndex, limit);
+        [FromQuery] int? limit = null,
+        CancellationToken cancellationToken = default) =>
+        DiscoverRow(userManager, "/api/v1/discover/tv?sortBy=popularity.desc", "tv", startIndex, limit, cancellationToken);
 
     [HttpGet("discover/tv/top-rated")]
     [Authorize]
-    public ActionResult<QueryResult<BaseItemDto>> TvTopRated(
+    public Task<ActionResult<QueryResult<BaseItemDto>>> TvTopRated(
         [FromServices] IUserManager userManager,
         [FromQuery] int startIndex = 0,
-        [FromQuery] int? limit = null) =>
-        DiscoverRow(userManager, "/api/v1/discover/tv?sortBy=vote_average.desc&voteCountGte=200", "tv", startIndex, limit);
+        [FromQuery] int? limit = null,
+        CancellationToken cancellationToken = default) =>
+        DiscoverRow(userManager, "/api/v1/discover/tv?sortBy=vote_average.desc&voteCountGte=200", "tv", startIndex, limit, cancellationToken);
 
     [HttpGet("discover/tv/upcoming")]
     [Authorize]
-    public ActionResult<QueryResult<BaseItemDto>> TvUpcoming(
+    public Task<ActionResult<QueryResult<BaseItemDto>>> TvUpcoming(
         [FromServices] IUserManager userManager,
         [FromQuery] int startIndex = 0,
-        [FromQuery] int? limit = null) =>
-        DiscoverRow(userManager, "/api/v1/discover/tv/upcoming", "tv", startIndex, limit);
+        [FromQuery] int? limit = null,
+        CancellationToken cancellationToken = default) =>
+        DiscoverRow(userManager, "/api/v1/discover/tv/upcoming", "tv", startIndex, limit, cancellationToken);
 
     [HttpGet("discover/tv/anime")]
     [Authorize]
-    public ActionResult<QueryResult<BaseItemDto>> TvAnime(
+    public async Task<ActionResult<QueryResult<BaseItemDto>>> TvAnime(
         [FromServices] IUserManager userManager,
         [FromQuery] int startIndex = 0,
-        [FromQuery] int? limit = null) =>
-        _discoveryService.GetAnimeRow(GetUsername(userManager) ?? string.Empty, startIndex, limit);
+        [FromQuery] int? limit = null,
+        CancellationToken cancellationToken = default) =>
+        await _discoveryService.GetAnimeRowAsync(GetUsername(userManager) ?? string.Empty, startIndex, limit, cancellationToken).ConfigureAwait(false);
 
     [HttpGet("discover/movies/genre/{genreId}")]
     [Authorize]
-    public ActionResult<QueryResult<BaseItemDto>> MoviesByGenre(
+    public Task<ActionResult<QueryResult<BaseItemDto>>> MoviesByGenre(
         int genreId,
         [FromServices] IUserManager userManager,
         [FromQuery] int startIndex = 0,
-        [FromQuery] int? limit = null) =>
-        DiscoverRow(userManager, $"/api/v1/discover/movies?genre={genreId}", "movie", startIndex, limit);
+        [FromQuery] int? limit = null,
+        CancellationToken cancellationToken = default) =>
+        DiscoverRow(userManager, $"/api/v1/discover/movies?genre={genreId}", "movie", startIndex, limit, cancellationToken);
 
     [HttpGet("discover/tv/genre/{genreId}")]
     [Authorize]
-    public ActionResult<QueryResult<BaseItemDto>> TvByGenre(
+    public Task<ActionResult<QueryResult<BaseItemDto>>> TvByGenre(
         int genreId,
         [FromServices] IUserManager userManager,
         [FromQuery] int startIndex = 0,
-        [FromQuery] int? limit = null) =>
-        DiscoverRow(userManager, $"/api/v1/discover/tv?genre={genreId}", "tv", startIndex, limit);
+        [FromQuery] int? limit = null,
+        CancellationToken cancellationToken = default) =>
+        DiscoverRow(userManager, $"/api/v1/discover/tv?genre={genreId}", "tv", startIndex, limit, cancellationToken);
 
     [HttpGet("discover/movies/studio/{studioId}")]
     [Authorize]
-    public ActionResult<QueryResult<BaseItemDto>> MoviesByStudio(
+    public Task<ActionResult<QueryResult<BaseItemDto>>> MoviesByStudio(
         int studioId,
         [FromServices] IUserManager userManager,
         [FromQuery] int startIndex = 0,
-        [FromQuery] int? limit = null) =>
-        DiscoverRow(userManager, $"/api/v1/discover/movies?studio={studioId}", "movie", startIndex, limit);
+        [FromQuery] int? limit = null,
+        CancellationToken cancellationToken = default) =>
+        DiscoverRow(userManager, $"/api/v1/discover/movies?studio={studioId}", "movie", startIndex, limit, cancellationToken);
 
     [HttpGet("discover/tv/network/{networkId}")]
     [Authorize]
-    public ActionResult<QueryResult<BaseItemDto>> TvByNetwork(
+    public Task<ActionResult<QueryResult<BaseItemDto>>> TvByNetwork(
         int networkId,
         [FromServices] IUserManager userManager,
         [FromQuery] int startIndex = 0,
-        [FromQuery] int? limit = null) =>
-        DiscoverRow(userManager, $"/api/v1/discover/tv?network={networkId}", "tv", startIndex, limit);
+        [FromQuery] int? limit = null,
+        CancellationToken cancellationToken = default) =>
+        DiscoverRow(userManager, $"/api/v1/discover/tv?network={networkId}", "tv", startIndex, limit, cancellationToken);
 
     [HttpGet("discover/movies/provider/{providerId}")]
     [Authorize]
-    public ActionResult<QueryResult<BaseItemDto>> MoviesByProvider(
+    public Task<ActionResult<QueryResult<BaseItemDto>>> MoviesByProvider(
         int providerId,
         [FromServices] IUserManager userManager,
         [FromQuery] int startIndex = 0,
-        [FromQuery] int? limit = null)
+        [FromQuery] int? limit = null,
+        CancellationToken cancellationToken = default)
     {
         string region = SeerrFinPlugin.Instance.Configuration.WatchRegion;
         if (string.IsNullOrWhiteSpace(region))
         {
             region = "US";
         }
-        return DiscoverRow(userManager, $"/api/v1/discover/movies?watchProviders={providerId}&watchRegion={Uri.EscapeDataString(region)}", "movie", startIndex, limit);
+        return DiscoverRow(userManager, $"/api/v1/discover/movies?watchProviders={providerId}&watchRegion={Uri.EscapeDataString(region)}", "movie", startIndex, limit, cancellationToken);
     }
 
     [HttpGet("discover/tv/provider/{providerId}")]
     [Authorize]
-    public ActionResult<QueryResult<BaseItemDto>> TvByProvider(
+    public Task<ActionResult<QueryResult<BaseItemDto>>> TvByProvider(
         int providerId,
         [FromServices] IUserManager userManager,
         [FromQuery] int startIndex = 0,
-        [FromQuery] int? limit = null)
+        [FromQuery] int? limit = null,
+        CancellationToken cancellationToken = default)
     {
         string region = SeerrFinPlugin.Instance.Configuration.WatchRegion;
         if (string.IsNullOrWhiteSpace(region))
         {
             region = "US";
         }
-        return DiscoverRow(userManager, $"/api/v1/discover/tv?watchProviders={providerId}&watchRegion={Uri.EscapeDataString(region)}", "tv", startIndex, limit);
+        return DiscoverRow(userManager, $"/api/v1/discover/tv?watchProviders={providerId}&watchRegion={Uri.EscapeDataString(region)}", "tv", startIndex, limit, cancellationToken);
     }
 
-    private ActionResult<QueryResult<BaseItemDto>> DiscoverRow(
+    private async Task<ActionResult<QueryResult<BaseItemDto>>> DiscoverRow(
         IUserManager userManager,
         string jellyseerrPath,
         string mediaType,
         int startIndex,
-        int? limit) =>
-        _discoveryService.GetDiscoverRow(GetUsername(userManager) ?? string.Empty, jellyseerrPath, mediaType, startIndex, limit);
+        int? limit,
+        CancellationToken cancellationToken) =>
+        await _discoveryService.GetDiscoverRowAsync(GetUsername(userManager) ?? string.Empty, jellyseerrPath, mediaType, startIndex, limit, cancellationToken: cancellationToken).ConfigureAwait(false);
 
     [HttpGet("search")]
     [Authorize]
-    public ActionResult<QueryResult<BaseItemDto>> Search(
+    public async Task<ActionResult<QueryResult<BaseItemDto>>> Search(
         [FromServices] IUserManager userManager,
         [FromQuery] string? query,
         [FromQuery] string? language = null,
         [FromQuery] int startIndex = 0,
-        [FromQuery] int? limit = null)
+        [FromQuery] int? limit = null,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(query))
         {
@@ -646,22 +663,22 @@ public class SeerrFinController : ControllerBase
             });
         }
 
-        return _discoveryService.Search(GetUsername(userManager) ?? string.Empty, query, language, startIndex, limit);
+        return await _discoveryService.SearchAsync(GetUsername(userManager) ?? string.Empty, query, language, startIndex, limit, cancellationToken).ConfigureAwait(false);
     }
 
     [HttpGet("genres/movie")]
     [Authorize]
-    public ActionResult MovieGenres([FromServices] IUserManager userManager)
+    public async Task<ActionResult> MovieGenres([FromServices] IUserManager userManager, CancellationToken cancellationToken = default)
     {
-        JArray data = _discoveryService.GetGenreSlider("movie", GetUsername(userManager) ?? string.Empty);
+        JArray data = await _discoveryService.GetGenreSliderAsync("movie", GetUsername(userManager) ?? string.Empty, cancellationToken).ConfigureAwait(false);
         return Content(data.ToString(), "application/json");
     }
 
     [HttpGet("genres/tv")]
     [Authorize]
-    public ActionResult TvGenres([FromServices] IUserManager userManager)
+    public async Task<ActionResult> TvGenres([FromServices] IUserManager userManager, CancellationToken cancellationToken = default)
     {
-        JArray data = _discoveryService.GetGenreSlider("tv", GetUsername(userManager) ?? string.Empty);
+        JArray data = await _discoveryService.GetGenreSliderAsync("tv", GetUsername(userManager) ?? string.Empty, cancellationToken).ConfigureAwait(false);
         return Content(data.ToString(), "application/json");
     }
 
@@ -725,12 +742,13 @@ public class SeerrFinController : ControllerBase
 
     [HttpGet("details/{mediaType}/{mediaId}")]
     [Authorize]
-    public ActionResult GetDetails(
+    public async Task<ActionResult> GetDetails(
         string mediaType,
         int mediaId,
-        [FromServices] IUserManager userManager)
+        [FromServices] IUserManager userManager,
+        CancellationToken cancellationToken = default)
     {
-        JObject? details = _discoveryService.GetMediaDetails(GetUsername(userManager) ?? string.Empty, mediaType, mediaId);
+        JObject? details = await _discoveryService.GetMediaDetailsAsync(GetUsername(userManager) ?? string.Empty, mediaType, mediaId, cancellationToken).ConfigureAwait(false);
         return details == null ? NotFound() : Content(details.ToString(), "application/json");
     }
 
@@ -959,9 +977,10 @@ public class SeerrFinController : ControllerBase
 
     [HttpPost("letterboxd/request/check")]
     [Authorize]
-    public ActionResult CheckLetterboxdRequestStatus(
+    public async Task<ActionResult> CheckLetterboxdRequestStatus(
         [FromServices] IUserManager userManager,
-        [FromBody] LetterboxdBulkRequestPayload payload)
+        [FromBody] LetterboxdBulkRequestPayload payload,
+        CancellationToken cancellationToken = default)
     {
         string? username = GetUsername(userManager);
         if (string.IsNullOrWhiteSpace(username))
@@ -974,8 +993,8 @@ public class SeerrFinController : ControllerBase
             return BadRequest(new { message = "Select at least one movie." });
         }
 
-        List<int> alreadyRequested = _discoveryService
-            .GetAlreadyRequestedMovieIds(username, payload.TmdbIds);
+        List<int> alreadyRequested = await _discoveryService
+            .GetAlreadyRequestedMovieIdsAsync(username, payload.TmdbIds, cancellationToken).ConfigureAwait(false);
         return Ok(new { tmdbIds = alreadyRequested });
     }
 

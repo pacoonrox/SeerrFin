@@ -9,12 +9,14 @@ namespace Jellyfin.Plugin.SeerrFin.Services;
 public class JellyseerrProxyService
 {
     private readonly ILogger<JellyseerrProxyService> _logger;
+    private readonly IHttpClientFactory _httpClientFactory;
     private static readonly TimeSpan UserCacheTtl = TimeSpan.FromMinutes(5);
     private static readonly ConcurrentDictionary<string, CachedSeerrUser> UserIdCache = new(StringComparer.OrdinalIgnoreCase);
 
-    public JellyseerrProxyService(ILogger<JellyseerrProxyService> logger)
+    public JellyseerrProxyService(ILogger<JellyseerrProxyService> logger, IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
+        _httpClientFactory = httpClientFactory;
     }
 
     public async Task<(int StatusCode, string Body, string ContentType)> ProxyAsync(
@@ -35,7 +37,10 @@ public class JellyseerrProxyService
             return (401, "{\"error\":true,\"message\":\"User not found.\"}", "application/json");
         }
 
-        using HttpClient client = new() { BaseAddress = new Uri(config.JellyseerrUrl!) };
+        // Pull a pooled handler from the factory instead of "new HttpClient()" per call - avoids paying
+        // a fresh TCP/TLS handshake to Seerr on every proxied request.
+        using HttpClient client = _httpClientFactory.CreateClient();
+        client.BaseAddress = new Uri(config.JellyseerrUrl!);
         client.DefaultRequestHeaders.Add("X-Api-Key", config.JellyseerrApiKey);
 
         int? jellyseerrUserId = await ResolveJellyseerrUserIdAsync(client, config, username, cancellationToken).ConfigureAwait(false);

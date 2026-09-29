@@ -17,25 +17,39 @@ public class JellyseerrDiscoveryService
     // For future reference: 1 UNKNOWN, 2 PENDING, 3 PROCESSING, 4 PARTIALLY_AVAILABLE, 5 AVAILABLE, 6 BLOCKLISTED, 7 DELETED.
 
     private readonly ImageCacheService _imageCacheService;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<JellyseerrDiscoveryService> _logger;
     private static readonly TimeSpan UserCacheTtl = TimeSpan.FromMinutes(5);
     private static readonly ConcurrentDictionary<string, CachedSeerrUser> UserIdCache = new(StringComparer.OrdinalIgnoreCase);
 
+    // Short-lived cache of raw upstream (Seerr/TMDB) page responses. Not personalized - the same page
+    // fetched by any user is identical - so a single shared cache lets "Load more" and repeated/typeahead
+    // searches reuse pages instead of re-walking pages 1..N on every request.
+    private static readonly TimeSpan PageCacheTtl = TimeSpan.FromSeconds(30);
+    private static readonly ConcurrentDictionary<string, CachedPage> PageCache = new(StringComparer.Ordinal);
+
+    // TMDB release dates for a given movie don't change within the lifetime of this cache, so this can
+    // live much longer than the page cache. Avoids re-hitting TMDB per movie on every subsequent page load.
+    private static readonly TimeSpan ReleaseTypeCacheTtl = TimeSpan.FromHours(6);
+    private static readonly ConcurrentDictionary<int, CachedReleaseTypeMatch> ReleaseTypeCache = new();
+
     public JellyseerrDiscoveryService(
         ImageCacheService imageCacheService,
+        IHttpClientFactory httpClientFactory,
         ILogger<JellyseerrDiscoveryService> logger)
     {
         _imageCacheService = imageCacheService;
+        _httpClientFactory = httpClientFactory;
         _logger = logger;
     }
 
-    public QueryResult<BaseItemDto> GetAnimeRow(string username, int startIndex = 0, int? limit = null)
+    public Task<QueryResult<BaseItemDto>> GetAnimeRowAsync(string username, int startIndex = 0, int? limit = null, CancellationToken cancellationToken = default)
     {
         AdvancedDiscoverySettings discovery = AdvancedSettingsHelper.Resolve(SeerrFinPlugin.Instance.Configuration).Discovery;
-        return GetDiscoverRow(username, discovery.AnimeDiscoverPath, "tv", startIndex, limit, useSeerrMapping: discovery.UseSeerrMappingForAnime);
+        return GetDiscoverRowAsync(username, discovery.AnimeDiscoverPath, "tv", startIndex, limit, useSeerrMapping: discovery.UseSeerrMappingForAnime, cancellationToken);
     }
 
-    public QueryResult<BaseItemDto> Search(string username, string query, string? language = null, int startIndex = 0, int? limit = null)
+    public async Task<QueryResult<BaseItemDto>> SearchAsync(string username, string query, string? language = null, int startIndex = 0, int? limit = null, CancellationToken cancellationToken = default)
     {
         PluginConfiguration config = SeerrFinPlugin.Instance.Configuration;
         if (string.IsNullOrWhiteSpace(config.JellyseerrUrl) ||
@@ -59,7 +73,7 @@ public class JellyseerrDiscoveryService
         }
 
         using HttpClient client = CreateClient(config);
-        int? jellyseerrUserId = ResolveJellyseerrUserId(client, config, username);
+        int? jellyseerrUserId = await ResolveJellyseerrUserIdAsync(client, config, username, cancellationToken).ConfigureAwait(false);
         if (jellyseerrUserId == null)
         {
             return EmptyResult();
@@ -80,20 +94,19 @@ public class JellyseerrDiscoveryService
         {
             try
             {
-                string path = $"/api/v1/search?query={Uri.EscapeDataString(query)}&page={jellyseerrPage}";
+                string path = $"{config.JellyseerrUrl!.TrimEnd('/')}/api/v1/search?query={Uri.EscapeDataString(query)}&page={jellyseerrPage}";
                 if (!string.IsNullOrWhiteSpace(language))
                 {
                     path += $"&language={Uri.EscapeDataString(language.Trim())}";
                 }
 
-                HttpResponseMessage response = client.GetAsync(path).GetAwaiter().GetResult();
-                if (!response.IsSuccessStatusCode)
+                string cacheKey = $"search|{path}|{jellyseerrUserId}";
+                JObject? json = await GetOrFetchJsonAsync(cacheKey, () => FetchJsonAsync(client, path, cancellationToken)).ConfigureAwait(false);
+                if (json == null)
                 {
                     break;
                 }
 
-                string jsonRaw = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-                JObject json = JObject.Parse(jsonRaw);
                 JArray? results = json.Value<JArray>("results");
                 if (results == null || results.Count == 0)
                 {
@@ -154,7 +167,7 @@ public class JellyseerrDiscoveryService
         };
     }
 
-    public QueryResult<BaseItemDto> GetDiscoverRow(string username, string jellyseerrPath, string? mediaTypeFilter = null, int startIndex = 0, int? limit = null, bool useSeerrMapping = false)
+    public async Task<QueryResult<BaseItemDto>> GetDiscoverRowAsync(string username, string jellyseerrPath, string? mediaTypeFilter = null, int startIndex = 0, int? limit = null, bool useSeerrMapping = false, CancellationToken cancellationToken = default)
     {
         PluginConfiguration config = SeerrFinPlugin.Instance.Configuration;
         if (string.IsNullOrWhiteSpace(config.JellyseerrUrl) || string.IsNullOrWhiteSpace(config.JellyseerrApiKey))
@@ -168,7 +181,7 @@ public class JellyseerrDiscoveryService
         }
 
         using HttpClient client = CreateClient(config);
-        int? jellyseerrUserId = ResolveJellyseerrUserId(client, config, username);
+        int? jellyseerrUserId = await ResolveJellyseerrUserIdAsync(client, config, username, cancellationToken).ConfigureAwait(false);
         if (jellyseerrUserId == null)
         {
             return EmptyResult();
@@ -185,7 +198,6 @@ public class JellyseerrDiscoveryService
         }
 
         bool useTmdbReleaseFilter = hasReleaseTypeFilter;
-        Dictionary<int, bool> releaseTypeCache = new();
 
         // Seerr mapping needs to be used for Anime discovery because of Seerr's default filters applied on their direct API.
         AdvancedDiscoverySettings discoverySettings = AdvancedSettingsHelper.Resolve(config).Discovery;
@@ -210,28 +222,23 @@ public class JellyseerrDiscoveryService
                 {
                     if (jellyseerrPath.Contains("/discover/trending", StringComparison.OrdinalIgnoreCase))
                     {
-                        json = FetchTmdbTrendingMoviesJson(tmdbApiKey!, config, jellyseerrPage, releaseTypeCache);
+                        json = await FetchTmdbTrendingMoviesJsonAsync(tmdbApiKey!, config, jellyseerrPage, cancellationToken).ConfigureAwait(false);
                     }
                     else
                     {
                         string url = BuildTmdbDiscoverUrl(jellyseerrPath, config, jellyseerrPage);
-                        json = FetchTmdbDiscoverJson(url, tmdbApiKey!);
+                        json = await FetchTmdbDiscoverJsonAsync(url, tmdbApiKey!, cancellationToken).ConfigureAwait(false);
                     }
                 }
                 else
                 {
-                    string path = jellyseerrPath.Contains('?', StringComparison.Ordinal)
+                    string relativePath = jellyseerrPath.Contains('?', StringComparison.Ordinal)
                         ? $"{jellyseerrPath}&page={jellyseerrPage}"
                         : $"{jellyseerrPath}?page={jellyseerrPage}";
+                    string path = $"{config.JellyseerrUrl!.TrimEnd('/')}{relativePath}";
 
-                    HttpResponseMessage response = client.GetAsync(path).GetAwaiter().GetResult();
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        break;
-                    }
-
-                    string jsonRaw = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-                    json = JObject.Parse(jsonRaw);
+                    string cacheKey = $"discover|{path}|{jellyseerrUserId}";
+                    json = await GetOrFetchJsonAsync(cacheKey, () => FetchJsonAsync(client, path, cancellationToken)).ConfigureAwait(false);
                 }
 
                 if (json == null)
@@ -323,22 +330,22 @@ public class JellyseerrDiscoveryService
         };
     }
 
-    public JArray GetGenreSlider(string mediaType, string username)
+    public Task<JArray> GetGenreSliderAsync(string mediaType, string username, CancellationToken cancellationToken = default)
     {
         string path = mediaType == "movie"
             ? "/api/v1/discover/genreslider/movie"
             : "/api/v1/discover/genreslider/tv";
-        return GetJsonArray(path, username);
+        return GetJsonArrayAsync(path, username, cancellationToken);
     }
 
-    public JArray GetWatchProviders(string mediaType, string username)
+    public Task<JArray> GetWatchProvidersAsync(string mediaType, string username, CancellationToken cancellationToken = default)
     {
         PluginConfiguration config = SeerrFinPlugin.Instance.Configuration;
         string region = string.IsNullOrWhiteSpace(config.WatchRegion) ? "US" : config.WatchRegion;
         string path = mediaType == "movie"
             ? $"/api/v1/watchproviders/movies?watchRegion={Uri.EscapeDataString(region)}"
             : $"/api/v1/watchproviders/tv?watchRegion={Uri.EscapeDataString(region)}";
-        return GetJsonArray(path, username);
+        return GetJsonArrayAsync(path, username, cancellationToken);
     }
 
     public JArray GetStudios() => ToBrowseArray(MovieStudios);
@@ -462,48 +469,58 @@ public class JellyseerrDiscoveryService
         (155, "History", "/9fGgdJz17aBX7dOyfHJtsozB7bf.png", true)
     };
 
-    public JObject? GetMediaDetails(string username, string mediaType, int mediaId)
+    public Task<JObject?> GetMediaDetailsAsync(string username, string mediaType, int mediaId, CancellationToken cancellationToken = default)
     {
         PluginConfiguration config = SeerrFinPlugin.Instance.Configuration;
         if (string.IsNullOrWhiteSpace(config.JellyseerrUrl) || string.IsNullOrWhiteSpace(config.JellyseerrApiKey))
         {
-            return null;
+            return Task.FromResult<JObject?>(null);
         }
 
-        return FetchJellyseerrDetails(username, config, mediaType, mediaId);
+        return FetchJellyseerrDetailsAsync(username, config, mediaType, mediaId, cancellationToken);
     }
 
-    public List<int> GetAlreadyRequestedMovieIds(string username, IEnumerable<int> tmdbIds)
+    public async Task<List<int>> GetAlreadyRequestedMovieIdsAsync(string username, IEnumerable<int> tmdbIds, CancellationToken cancellationToken = default)
     {
         string scope = AdvancedSettingsHelper.Resolve(SeerrFinPlugin.Instance.Configuration)
             .Letterboxd.AlreadyRequestedStatusScope;
         bool availableOnly = string.Equals(scope, "availableOnly", StringComparison.OrdinalIgnoreCase);
 
-        List<int> alreadyRequested = new();
-        foreach (int tmdbId in tmdbIds.Distinct())
-        {
-            JObject? details = GetMediaDetails(username, "movie", tmdbId);
-            JObject? mediaInfo = details?.Value<JObject>("mediaInfo");
-            if (mediaInfo == null)
-            {
-                continue;
-            }
+        // Details lookups are independent per movie - fan them out instead of awaiting one at a time.
+        const int maxConcurrency = 5;
+        using SemaphoreSlim throttle = new(maxConcurrency);
+        List<int> distinctIds = tmdbIds.Distinct().ToList();
 
-            if (!availableOnly || IsAvailableInLibrary(details!))
+        async Task<int?> CheckMovieAsync(int tmdbId)
+        {
+            await throttle.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
             {
-                alreadyRequested.Add(tmdbId);
+                JObject? details = await GetMediaDetailsAsync(username, "movie", tmdbId, cancellationToken).ConfigureAwait(false);
+                JObject? mediaInfo = details?.Value<JObject>("mediaInfo");
+                if (mediaInfo == null)
+                {
+                    return null;
+                }
+
+                return !availableOnly || IsAvailableInLibrary(details!) ? tmdbId : null;
+            }
+            finally
+            {
+                throttle.Release();
             }
         }
 
-        return alreadyRequested;
+        int?[] results = await Task.WhenAll(distinctIds.Select(CheckMovieAsync)).ConfigureAwait(false);
+        return results.Where(x => x.HasValue).Select(x => x!.Value).ToList();
     }
 
-    private JObject? FetchJellyseerrDetails(string username, PluginConfiguration config, string mediaType, int mediaId)
+    private async Task<JObject?> FetchJellyseerrDetailsAsync(string username, PluginConfiguration config, string mediaType, int mediaId, CancellationToken cancellationToken)
     {
         using HttpClient client = CreateClient(config);
         if (!string.IsNullOrWhiteSpace(username))
         {
-            int? jellyseerrUserId = ResolveJellyseerrUserId(client, config, username);
+            int? jellyseerrUserId = await ResolveJellyseerrUserIdAsync(client, config, username, cancellationToken).ConfigureAwait(false);
             if (jellyseerrUserId != null)
             {
                 client.DefaultRequestHeaders.Add("X-Api-User", jellyseerrUserId.ToString());
@@ -511,19 +528,12 @@ public class JellyseerrDiscoveryService
         }
 
         string path = mediaType == "tv"
-            ? $"/api/v1/tv/{mediaId}"
-            : $"/api/v1/movie/{mediaId}";
+            ? $"{config.JellyseerrUrl!.TrimEnd('/')}/api/v1/tv/{mediaId}"
+            : $"{config.JellyseerrUrl!.TrimEnd('/')}/api/v1/movie/{mediaId}";
 
         try
         {
-            HttpResponseMessage response = client.GetAsync(path).GetAwaiter().GetResult();
-            if (!response.IsSuccessStatusCode)
-            {
-                return null;
-            }
-
-            string jsonRaw = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-            return JObject.Parse(jsonRaw);
+            return await FetchJsonAsync(client, path, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -532,7 +542,7 @@ public class JellyseerrDiscoveryService
         }
     }
 
-    private JArray GetJsonArray(string path, string username)
+    private async Task<JArray> GetJsonArrayAsync(string relativePath, string username, CancellationToken cancellationToken)
     {
         PluginConfiguration config = SeerrFinPlugin.Instance.Configuration;
         if (string.IsNullOrWhiteSpace(config.JellyseerrUrl) || string.IsNullOrWhiteSpace(config.JellyseerrApiKey))
@@ -543,24 +553,20 @@ public class JellyseerrDiscoveryService
         using HttpClient client = CreateClient(config);
         if (!string.IsNullOrWhiteSpace(username))
         {
-            int? jellyseerrUserId = ResolveJellyseerrUserId(client, config, username);
+            int? jellyseerrUserId = await ResolveJellyseerrUserIdAsync(client, config, username, cancellationToken).ConfigureAwait(false);
             if (jellyseerrUserId != null)
             {
                 client.DefaultRequestHeaders.Add("X-Api-User", jellyseerrUserId.ToString());
             }
         }
 
+        string path = $"{config.JellyseerrUrl!.TrimEnd('/')}{relativePath}";
+
         try
         {
-            HttpResponseMessage response = client.GetAsync(path).GetAwaiter().GetResult();
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("SeerrFin • Seerr request failed for {Path} with status {StatusCode}", path, response.StatusCode);
-                return new JArray();
-            }
+            string cacheKey = $"array|{path}";
+            JToken? token = await GetOrFetchTokenAsync(cacheKey, () => FetchTokenAsync(client, path, cancellationToken)).ConfigureAwait(false);
 
-            string jsonRaw = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-            JToken? token = JToken.Parse(jsonRaw);
             // Endpoints return either a bare array or { results: [...] }
             return token switch
             {
@@ -667,15 +673,65 @@ public class JellyseerrDiscoveryService
     private string ResolveDiscoverImageUrl(string sourceUrl, bool cacheImages) =>
         cacheImages ? ImageCacheHelper.GetLazyCachedImageUrl(_imageCacheService, sourceUrl) : sourceUrl;
 
-    private static HttpClient CreateClient(PluginConfiguration config)
+    private HttpClient CreateClient(PluginConfiguration config)
     {
-        HttpClient client = new() { BaseAddress = new Uri(config.JellyseerrUrl!) };
+        // Pull a pooled handler from the factory instead of "new HttpClient()" per call - avoids paying
+        // a fresh TCP/TLS handshake to Seerr/TMDB on every single search keystroke or "load more" click.
+        HttpClient client = _httpClientFactory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", config.JellyseerrApiKey);
         return client;
     }
 
+    private async Task<JObject?> FetchJsonAsync(HttpClient client, string url, CancellationToken cancellationToken)
+    {
+        using HttpResponseMessage response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("SeerrFin • Seerr request failed for {Path} with status {StatusCode}", url, response.StatusCode);
+            return null;
+        }
+
+        string jsonRaw = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return JObject.Parse(jsonRaw);
+    }
+
+    private async Task<JToken?> FetchTokenAsync(HttpClient client, string url, CancellationToken cancellationToken)
+    {
+        using HttpResponseMessage response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("SeerrFin • Seerr request failed for {Path} with status {StatusCode}", url, response.StatusCode);
+            return null;
+        }
+
+        string jsonRaw = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return JToken.Parse(jsonRaw);
+    }
+
+    private static async Task<JObject?> GetOrFetchJsonAsync(string cacheKey, Func<Task<JObject?>> fetcher)
+    {
+        JToken? cached = await GetOrFetchTokenAsync(cacheKey, async () => await fetcher().ConfigureAwait(false)).ConfigureAwait(false);
+        return cached as JObject;
+    }
+
+    private static async Task<JToken?> GetOrFetchTokenAsync(string cacheKey, Func<Task<JToken?>> fetcher)
+    {
+        if (PageCache.TryGetValue(cacheKey, out CachedPage? cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
+        {
+            return cached.Json;
+        }
+
+        JToken? fresh = await fetcher().ConfigureAwait(false);
+        if (fresh != null)
+        {
+            PageCache[cacheKey] = new CachedPage(fresh, DateTimeOffset.UtcNow.Add(PageCacheTtl));
+        }
+
+        return fresh;
+    }
+
     // Match Jellyfin username to linked Seerr user for per-user X-Api-User header.
-    private static int? ResolveJellyseerrUserId(HttpClient client, PluginConfiguration config, string username)
+    private static async Task<int?> ResolveJellyseerrUserIdAsync(HttpClient client, PluginConfiguration config, string username, CancellationToken cancellationToken)
     {
         string cacheKey = BuildUserCacheKey(config, username);
         if (UserIdCache.TryGetValue(cacheKey, out CachedSeerrUser? cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
@@ -683,8 +739,9 @@ public class JellyseerrDiscoveryService
             return cached.UserId;
         }
 
-        HttpResponseMessage usersResponse = client.GetAsync($"/api/v1/user?q={Uri.EscapeDataString(username)}").GetAwaiter().GetResult();
-        string userResponseRaw = usersResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+        string url = $"{config.JellyseerrUrl!.TrimEnd('/')}/api/v1/user?q={Uri.EscapeDataString(username)}";
+        using HttpResponseMessage usersResponse = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
+        string userResponseRaw = await usersResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         int? userId = usersResponse.IsSuccessStatusCode
             ? JObject.Parse(userResponseRaw).Value<JArray>("results")?
             .OfType<JObject>()
@@ -700,6 +757,10 @@ public class JellyseerrDiscoveryService
         $"{config.JellyseerrUrl?.TrimEnd('/') ?? string.Empty}|{username.Trim()}";
 
     private sealed record CachedSeerrUser(int? UserId, DateTimeOffset ExpiresAt);
+
+    private sealed record CachedPage(JToken Json, DateTimeOffset ExpiresAt);
+
+    private sealed record CachedReleaseTypeMatch(bool Matches, DateTimeOffset ExpiresAt);
 
     private static int? GetMediaStatus(JObject item)
     {
@@ -814,33 +875,50 @@ public class JellyseerrDiscoveryService
         }
     }
 
-    private JObject? FetchTmdbTrendingMoviesJson(string apiKey, PluginConfiguration config, int page, Dictionary<int, bool> releaseTypeCache)
+    private async Task<JObject?> FetchTmdbTrendingMoviesJsonAsync(string apiKey, PluginConfiguration config, int page, CancellationToken cancellationToken)
     {
         string url = "https://api.themoviedb.org/3/trending/movie/week?page="
             + page.ToString(CultureInfo.InvariantCulture);
 
-        using HttpRequestMessage request = CreateTmdbRequest(url, apiKey);
-        using HttpResponseMessage response = new HttpClient().SendAsync(request).GetAwaiter().GetResult();
-        if (!response.IsSuccessStatusCode)
+        string cacheKey = $"tmdb-trending|{url}";
+        JObject? tmdb = await GetOrFetchJsonAsync(cacheKey, () => FetchTmdbRawAsync(url, apiKey, "TMDB trending", cancellationToken)).ConfigureAwait(false);
+        if (tmdb == null)
         {
-            _logger.LogWarning("SeerrFin • TMDB trending request failed with status {StatusCode} for {Url}", (int)response.StatusCode, url);
             return null;
         }
 
-        string jsonRaw = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-        JObject tmdb = JObject.Parse(jsonRaw);
         IReadOnlyList<int> releaseTypes = GetReleaseTypes(config);
-        JArray results = new();
+        List<JObject> candidates = tmdb.Value<JArray>("results")?.OfType<JObject>().ToList() ?? new List<JObject>();
 
-        foreach (JObject movie in tmdb.Value<JArray>("results")?.OfType<JObject>() ?? [])
+        // Release-type checks are independent per movie - run them concurrently (bounded) instead of
+        // one blocking round-trip to TMDB at a time, which used to serialize an entire page behind N requests.
+        const int maxConcurrency = 8;
+        using SemaphoreSlim throttle = new(maxConcurrency);
+
+        async Task<(JObject Movie, bool Matches)> CheckAsync(JObject movie)
         {
-            int id = movie.Value<int>("id");
-            if (!MovieMatchesReleaseTypes(id, releaseTypes, apiKey, releaseTypeCache))
+            await throttle.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
             {
-                continue;
+                int id = movie.Value<int>("id");
+                bool matches = await MovieMatchesReleaseTypesAsync(id, releaseTypes, apiKey, cancellationToken).ConfigureAwait(false);
+                return (movie, matches);
             }
+            finally
+            {
+                throttle.Release();
+            }
+        }
 
-            results.Add(MapTmdbMovie(movie));
+        (JObject Movie, bool Matches)[] checkedMovies = await Task.WhenAll(candidates.Select(CheckAsync)).ConfigureAwait(false);
+
+        JArray results = new();
+        foreach ((JObject movie, bool matches) in checkedMovies)
+        {
+            if (matches)
+            {
+                results.Add(MapTmdbMovie(movie));
+            }
         }
 
         return new JObject
@@ -851,24 +929,21 @@ public class JellyseerrDiscoveryService
         };
     }
 
-    private bool MovieMatchesReleaseTypes(int movieId, IReadOnlyList<int> releaseTypes, string apiKey, Dictionary<int, bool> cache)
+    private async Task<bool> MovieMatchesReleaseTypesAsync(int movieId, IReadOnlyList<int> releaseTypes, string apiKey, CancellationToken cancellationToken)
     {
-        if (cache.TryGetValue(movieId, out bool cached))
+        if (ReleaseTypeCache.TryGetValue(movieId, out CachedReleaseTypeMatch? cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
         {
-            return cached;
+            return cached.Matches;
         }
 
         bool matches = false;
         try
         {
             string url = "https://api.themoviedb.org/3/movie/" + movieId.ToString(CultureInfo.InvariantCulture) + "/release_dates";
-
-            using HttpRequestMessage request = CreateTmdbRequest(url, apiKey);
-            using HttpResponseMessage response = new HttpClient().SendAsync(request).GetAwaiter().GetResult();
-            if (response.IsSuccessStatusCode)
+            JObject? releaseDates = await FetchTmdbRawAsync(url, apiKey, "TMDB release dates", cancellationToken).ConfigureAwait(false);
+            if (releaseDates != null)
             {
-                string jsonRaw = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-                matches = HasMatchingReleaseTypeAnywhere(JObject.Parse(jsonRaw), releaseTypes);
+                matches = HasMatchingReleaseTypeAnywhere(releaseDates, releaseTypes);
             }
         }
         catch (Exception ex)
@@ -876,7 +951,7 @@ public class JellyseerrDiscoveryService
             _logger.LogDebug(ex, "SeerrFin • failed to fetch TMDB release dates for movie {MovieId}", movieId);
         }
 
-        cache[movieId] = matches;
+        ReleaseTypeCache[movieId] = new CachedReleaseTypeMatch(matches, DateTimeOffset.UtcNow.Add(ReleaseTypeCacheTtl));
         return matches;
     }
 
@@ -916,20 +991,16 @@ public class JellyseerrDiscoveryService
         };
     }
 
-    private JObject? FetchTmdbDiscoverJson(string url, string apiKey)
+    private async Task<JObject?> FetchTmdbDiscoverJsonAsync(string url, string apiKey, CancellationToken cancellationToken)
     {
-        using HttpRequestMessage request = CreateTmdbRequest(url, apiKey);
-        using HttpResponseMessage response = new HttpClient().SendAsync(request).GetAwaiter().GetResult();
-        if (!response.IsSuccessStatusCode)
+        string cacheKey = $"tmdb-discover|{url}";
+        JObject? tmdb = await GetOrFetchJsonAsync(cacheKey, () => FetchTmdbRawAsync(url, apiKey, "TMDB discover", cancellationToken)).ConfigureAwait(false);
+        if (tmdb == null)
         {
-            _logger.LogWarning("SeerrFin • TMDB discover request failed with status {StatusCode} for {Url}", (int)response.StatusCode, url);
             return null;
         }
 
-        string jsonRaw = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-        JObject tmdb = JObject.Parse(jsonRaw);
         JArray results = new();
-        
         foreach (JObject movie in tmdb.Value<JArray>("results")?.OfType<JObject>() ?? [])
         {
             results.Add(MapTmdbMovie(movie));
@@ -941,6 +1012,21 @@ public class JellyseerrDiscoveryService
             ["totalResults"] = tmdb.Value<int?>("total_results"),
             ["totalPages"] = tmdb.Value<int?>("total_pages")
         };
+    }
+
+    private async Task<JObject?> FetchTmdbRawAsync(string url, string apiKey, string requestLabel, CancellationToken cancellationToken)
+    {
+        using HttpClient client = _httpClientFactory.CreateClient();
+        using HttpRequestMessage request = CreateTmdbRequest(url, apiKey);
+        using HttpResponseMessage response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("SeerrFin • {Label} request failed with status {StatusCode} for {Url}", requestLabel, (int)response.StatusCode, url);
+            return null;
+        }
+
+        string jsonRaw = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return JObject.Parse(jsonRaw);
     }
 
     private static HttpRequestMessage CreateTmdbRequest(string url, string apiKey)
